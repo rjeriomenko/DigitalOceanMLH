@@ -309,18 +309,25 @@ def generate_outfits():
                 60
             )
 
+            # Track completed outfits for progress (handles out-of-order completion)
+            completed_outfits = {'count': 0}
+
             # Create progress callback for outfit generation with live preview
             def outfit_progress_callback(outfit_num, total, image_path):
-                # Calculate incremental progress between 60% and 95%
-                progress_percent = 60 + int((outfit_num / total) * 35)
+                # Increment completed count
+                completed_outfits['count'] += 1
+                completed_count = completed_outfits['count']
+
+                # Calculate incremental progress based on completed count (not outfit number)
+                progress_percent = 60 + int((completed_count / total) * 35)
 
                 # Emit progress update
                 emit_progress(
                     socket_sid,
                     "generating_images",
-                    f"Generated outfit {outfit_num}/{total}",
+                    f"Generated {completed_count}/{total} outfits",
                     progress_percent,
-                    {"current_outfit": outfit_num, "total_outfits": total}
+                    {"completed_outfits": completed_count, "total_outfits": total}
                 )
 
                 # Emit live preview event with the image URL

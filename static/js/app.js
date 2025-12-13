@@ -120,7 +120,19 @@ clothingInput.addEventListener('change', (e) => {
     updateFileLabel(clothingInput, `${clothingFiles.length} file(s) selected`);
     // Show clear button
     document.getElementById('clear-clothing-btn').style.display = 'inline-block';
+    // Update button text
+    updateGenerateButtonText();
 });
+
+// Update button text based on whether images are uploaded
+function updateGenerateButtonText() {
+    const btnText = generateBtn.querySelector('.btn-text');
+    if (clothingFiles.length > 0) {
+        btnText.textContent = 'Generate Outfits';
+    } else {
+        btnText.textContent = 'Submit';
+    }
+}
 
 function updateFileLabel(input, text) {
     const label = input.nextElementSibling;
@@ -172,10 +184,13 @@ async function displayClothingPreviews(files) {
 
     // Create all placeholders first for instant feedback
     const placeholders = [];
+    const conversionPromises = [];
+
     for (let index = 0; index < files.length; index++) {
         const placeholderDiv = document.createElement('div');
         placeholderDiv.className = 'preview-item preview-loading';
         placeholderDiv.setAttribute('data-index', index);
+        placeholderDiv.setAttribute('data-file-id', `file-${Date.now()}-${index}`);
         placeholderDiv.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                 <span style="font-size:2rem;">👕</span>
@@ -185,32 +200,39 @@ async function displayClothingPreviews(files) {
         `;
         clothingPreview.appendChild(placeholderDiv);
         placeholders.push(placeholderDiv);
+
+        // Start conversion immediately (all in parallel)
+        const conversionPromise = (async (idx, file, placeholder) => {
+            try {
+                const imageUrl = await getImagePreviewUrl(file);
+
+                // Check if placeholder still exists (wasn't removed)
+                if (placeholder.parentNode) {
+                    placeholder.className = 'preview-item';
+                    placeholder.innerHTML = `
+                        <img src="${imageUrl}" alt="Clothing ${idx + 1}">
+                        <button class="remove-btn" onclick="removeClothing(${idx})">×</button>
+                    `;
+                }
+            } catch (error) {
+                console.error(`Error displaying preview for file ${idx}:`, error);
+                // Check if placeholder still exists
+                if (placeholder.parentNode) {
+                    placeholder.innerHTML = `
+                        <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#ffebee;">
+                            <span style="font-size:1.5rem;">⚠️</span>
+                        </div>
+                        <button class="remove-btn" onclick="removeClothing(${idx})">×</button>
+                    `;
+                }
+            }
+        })(index, files[index], placeholderDiv);
+
+        conversionPromises.push(conversionPromise);
     }
 
-    // Convert images asynchronously
-    for (let index = 0; index < files.length; index++) {
-        const file = files[index];
-        const placeholderDiv = placeholders[index];
-
-        try {
-            const imageUrl = await getImagePreviewUrl(file);
-            // Replace placeholder with actual image
-            placeholderDiv.className = 'preview-item';
-            placeholderDiv.innerHTML = `
-                <img src="${imageUrl}" alt="Clothing ${index + 1}">
-                <button class="remove-btn" onclick="removeClothing(${index})">×</button>
-            `;
-        } catch (error) {
-            console.error(`Error displaying preview for file ${index}:`, error);
-            // Show error placeholder
-            placeholderDiv.innerHTML = `
-                <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#ffebee;">
-                    <span style="font-size:1.5rem;">⚠️</span>
-                </div>
-                <button class="remove-btn" onclick="removeClothing(${index})">×</button>
-            `;
-        }
-    }
+    // Wait for all conversions to complete
+    await Promise.all(conversionPromises);
 }
 
 // Helper function to get preview URL (handles HEIC conversion)
@@ -289,6 +311,9 @@ function removeClothing(index) {
     } else {
         updateFileLabel(clothingInput, `${clothingFiles.length} file(s) selected`);
     }
+
+    // Update button text
+    updateGenerateButtonText();
 }
 
 function clearClothing() {
@@ -297,6 +322,7 @@ function clearClothing() {
     clothingPreview.innerHTML = '';
     updateFileLabel(clothingInput, 'Choose clothing images...');
     document.getElementById('clear-clothing-btn').style.display = 'none';
+    updateGenerateButtonText();
 }
 
 // ===== Live Outfit Preview =====
@@ -380,11 +406,21 @@ generateBtn.addEventListener('click', async () => {
     // Hide previous errors
     hideError();
 
+    // Create assistant message placeholder early (before API call) for live updates
+    if (clothingFiles.length > 0) {
+        createAssistantPlaceholder({ outfits: [] }); // Empty placeholder
+    }
+
     // Show progress
     if (progressSection) {
         progressSection.style.display = 'block';
         progressFill.style.width = '0%';
         progressText.textContent = 'Starting...';
+
+        // Smooth scroll to progress bar
+        setTimeout(() => {
+            progressSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
     }
 
     // Show loading state
@@ -447,7 +483,7 @@ generateBtn.addEventListener('click', async () => {
             addChatMessage('user', query);
         }
 
-        // Add assistant message with outfits
+        // Update assistant message with final data (placeholder already created)
         addChatMessage('assistant', data);
 
         // Clear query input for next message
@@ -466,19 +502,65 @@ generateBtn.addEventListener('click', async () => {
     }
 });
 
-// ===== Chat Message Display =====
-function addChatMessage(role, content) {
+// ===== Create Assistant Placeholder for Live Updates =====
+function createAssistantPlaceholder(data) {
+    // Check if placeholder already exists
+    const existingPlaceholder = chatMessages.querySelector('.assistant-placeholder');
+    if (existingPlaceholder) return; // Already created
+
     // Show chat history
     chatHistory.style.display = 'block';
 
-    // Remove placeholder if it exists
+    // Remove welcome placeholder if it exists
     const placeholder = chatMessages.querySelector('.chat-placeholder');
     if (placeholder) {
         placeholder.remove();
     }
 
     const messageDiv = document.createElement('div');
-    messageDiv.className = 'chat-message';
+    messageDiv.className = 'chat-message assistant-placeholder';
+
+    const assistantBubble = document.createElement('div');
+    assistantBubble.className = 'chat-message-assistant';
+
+    let bubbleHTML = '<div class="message-label">Fashion AI</div>';
+
+    // Add query response if exists
+    if (data.query_response) {
+        bubbleHTML += `<div class="message-text">${escapeHtml(data.query_response)}</div>`;
+    }
+
+    // Add empty outfits grid for live updates
+    bubbleHTML += '<div class="outfits-grid"></div>';
+
+    assistantBubble.innerHTML = bubbleHTML;
+    messageDiv.appendChild(assistantBubble);
+    chatMessages.appendChild(messageDiv);
+
+    // Scroll to message
+    messageDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+// ===== Chat Message Display =====
+function addChatMessage(role, content) {
+    // Show chat history
+    chatHistory.style.display = 'block';
+
+    // Remove welcome placeholder if it exists
+    const welcomePlaceholder = chatMessages.querySelector('.chat-placeholder');
+    if (welcomePlaceholder) {
+        welcomePlaceholder.remove();
+    }
+
+    // Check if we're updating an existing assistant placeholder
+    const existingAssistantPlaceholder = chatMessages.querySelector('.assistant-placeholder');
+
+    const messageDiv = existingAssistantPlaceholder || document.createElement('div');
+    if (!existingAssistantPlaceholder) {
+        messageDiv.className = 'chat-message';
+    } else {
+        messageDiv.classList.remove('assistant-placeholder');
+    }
 
     if (role === 'user') {
         // User message bubble
@@ -542,7 +624,10 @@ function addChatMessage(role, content) {
         messageDiv.appendChild(assistantBubble);
     }
 
-    chatMessages.appendChild(messageDiv);
+    // Only append if it's a new message
+    if (!existingAssistantPlaceholder) {
+        chatMessages.appendChild(messageDiv);
+    }
 
     // Scroll to the latest message
     messageDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -618,37 +703,49 @@ function magnifyCard(card) {
     const overlay = document.createElement('div');
     overlay.className = 'outfit-card-overlay';
 
-    // Clone the card
-    const magnifiedCard = card.cloneNode(true);
-    magnifiedCard.classList.add('outfit-card-magnified');
-    magnifiedCard.classList.remove('outfit-card');
+    // Get just the image from the card
+    const originalImg = card.querySelector('.outfit-image');
+    if (!originalImg) return; // No image to magnify
+
+    // Create magnified image container
+    const magnifiedCard = document.createElement('div');
+    magnifiedCard.className = 'outfit-card-magnified';
+
+    const img = document.createElement('img');
+    img.src = originalImg.src;
+    img.alt = originalImg.alt;
+    img.className = 'outfit-image-magnified';
+    img.style.width = '100%';
+    img.style.height = 'auto';
+    img.style.display = 'block';
+    img.style.borderRadius = 'var(--radius-sm)';
+
+    magnifiedCard.appendChild(img);
 
     // Add to body
     document.body.appendChild(overlay);
     document.body.appendChild(magnifiedCard);
 
     // 3D mouse tracking
-    let mouseX = 0;
-    let mouseY = 0;
-
     function handleMouseMove(e) {
         const rect = magnifiedCard.getBoundingClientRect();
         const cardCenterX = rect.left + rect.width / 2;
         const cardCenterY = rect.top + rect.height / 2;
 
-        // Calculate rotation based on mouse position
-        mouseX = (e.clientX - cardCenterX) / (rect.width / 2);
-        mouseY = (e.clientY - cardCenterY) / (rect.height / 2);
+        // Calculate normalized mouse position (-1 to 1)
+        const mouseX = (e.clientX - cardCenterX) / (rect.width / 2);
+        const mouseY = (e.clientY - cardCenterY) / (rect.height / 2);
 
-        // Apply 3D rotation (max 15 degrees)
-        const rotateY = mouseX * 15;
-        const rotateX = -mouseY * 15;
+        // Apply 3D rotation (max 20 degrees in both directions)
+        const rotateY = mouseX * 20;  // Horizontal mouse movement -> Y-axis rotation
+        const rotateX = -mouseY * 20; // Vertical mouse movement -> X-axis rotation
 
         magnifiedCard.style.transform = `
             translate(-50%, -50%)
             scale(1.5)
-            rotateY(${rotateY}deg)
+            perspective(1000px)
             rotateX(${rotateX}deg)
+            rotateY(${rotateY}deg)
         `;
     }
 

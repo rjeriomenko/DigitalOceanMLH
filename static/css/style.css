@@ -116,6 +116,18 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .chat-message-user {
@@ -123,33 +135,6 @@ body {
     padding: 15px 20px;
     border-radius: var(--radius-sm);
     border-left: 4px solid var(--primary);
-    position: relative;
-    margin-right: 20px;
-}
-
-/* Chat bubble tail pointing right */
-.chat-message-user::before {
-    content: '';
-    position: absolute;
-    right: -10px;
-    top: 15px;
-    width: 0;
-    height: 0;
-    border-style: solid;
-    border-width: 10px 0 10px 10px;
-    border-color: transparent transparent transparent var(--primary);
-}
-
-.chat-message-user::after {
-    content: '';
-    position: absolute;
-    right: -6px;
-    top: 17px;
-    width: 0;
-    height: 0;
-    border-style: solid;
-    border-width: 8px 0 8px 8px;
-    border-color: transparent transparent transparent rgba(0, 128, 255, 0.1);
 }
 
 .chat-message-user .message-label {
