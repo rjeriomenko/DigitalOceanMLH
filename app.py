@@ -97,6 +97,13 @@ def generate_outfits():
         query = request.form.get('query', '').strip()
         session_id = request.form.get('session_id', '').strip()
 
+        # Get precomputed descriptions if available
+        precomputed_descriptions_json = request.form.get('precomputed_descriptions', '{}')
+        try:
+            precomputed_descriptions = json.loads(precomputed_descriptions_json)
+        except:
+            precomputed_descriptions = {}
+
         # Check if images or query were provided
         clothing_files = request.files.getlist('clothing_images') if 'clothing_images' in request.files else []
 
@@ -234,37 +241,68 @@ def generate_outfits():
                     # Continue without selfie
 
             # Describe clothing items with per-item progress
-            emit_progress(
-                socket_sid,
-                "analyzing_clothing",
-                f"Analyzing {len(clothing_paths)} clothing items with Gemini Vision...",
-                25
-            )
+            # Use precomputed descriptions if available
+            clothing_descriptions = []
 
-            # Create progress callback for clothing analysis
-            def clothing_progress_callback(idx, total, description):
-                # Calculate incremental progress between 25% and 40%
-                progress_percent = 25 + int((idx / total) * 15)
+            # Check if we have all precomputed descriptions
+            all_precomputed = all(str(i) in precomputed_descriptions for i in range(len(clothing_paths)))
+
+            if all_precomputed and len(precomputed_descriptions) > 0:
+                # Use precomputed descriptions
                 emit_progress(
                     socket_sid,
                     "analyzing_clothing",
-                    f"Analyzed item {idx}/{total}: {description[:50]}...",
-                    progress_percent,
-                    {"current_item": idx, "total_items": total}
+                    f"Using cached descriptions for {len(clothing_paths)} items...",
+                    25
                 )
 
-            clothing_descriptions = describe_clothing_items(
-                clothing_paths,
-                progress_callback=clothing_progress_callback
-            )
+                for idx, path in enumerate(clothing_paths):
+                    clothing_descriptions.append({
+                        "index": idx + 1,
+                        "path": path,
+                        "description": precomputed_descriptions.get(str(idx), "clothing item")
+                    })
 
-            emit_progress(
-                socket_sid,
-                "analyzing_clothing",
-                f"Analyzed {len(clothing_descriptions)} items",
-                40,
-                {"items_count": len(clothing_descriptions)}
-            )
+                emit_progress(
+                    socket_sid,
+                    "analyzing_clothing",
+                    f"Loaded {len(clothing_descriptions)} cached descriptions",
+                    40,
+                    {"items_count": len(clothing_descriptions)}
+                )
+            else:
+                # Process normally with Vision API
+                emit_progress(
+                    socket_sid,
+                    "analyzing_clothing",
+                    f"Analyzing {len(clothing_paths)} clothing items with Gemini Vision...",
+                    25
+                )
+
+                # Create progress callback for clothing analysis
+                def clothing_progress_callback(idx, total, description):
+                    # Calculate incremental progress between 25% and 40%
+                    progress_percent = 25 + int((idx / total) * 15)
+                    emit_progress(
+                        socket_sid,
+                        "analyzing_clothing",
+                        f"Analyzed item {idx}/{total}: {description[:50]}...",
+                        progress_percent,
+                        {"current_item": idx, "total_items": total}
+                    )
+
+                clothing_descriptions = describe_clothing_items(
+                    clothing_paths,
+                    progress_callback=clothing_progress_callback
+                )
+
+                emit_progress(
+                    socket_sid,
+                    "analyzing_clothing",
+                    f"Analyzed {len(clothing_descriptions)} items",
+                    40,
+                    {"items_count": len(clothing_descriptions)}
+                )
 
             # Handle query if provided
             query_response = None
@@ -404,6 +442,65 @@ def generate_outfits():
 def serve_output(filename):
     """Serve generated outfit images"""
     return send_from_directory(app.config['OUTPUT_FOLDER'], filename)
+
+
+@app.route('/api/describe-image', methods=['POST'])
+def describe_image():
+    """
+    Pre-process a single clothing image with Gemini Vision.
+
+    Accepts:
+        - image: Single image file
+        - filename: Original filename for de-duplication
+
+    Returns:
+        JSON with description or error
+    """
+    try:
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image provided'}), 400
+
+        image_file = request.files['image']
+        filename = request.form.get('filename', image_file.filename)
+
+        if not image_file or not image_file.filename:
+            return jsonify({'error': 'Invalid image'}), 400
+
+        # Create temp directory for this image
+        temp_dir = tempfile.mkdtemp(dir=app.config['UPLOAD_FOLDER'])
+
+        try:
+            # Save and validate image
+            safe_name = secure_filename(filename) if filename else 'temp.jpg'
+            filepath = os.path.join(temp_dir, safe_name)
+            image_file.save(filepath)
+
+            # Validate and convert if needed
+            processed_path, mime_type = validate_and_prepare_image(filepath)
+
+            # Describe the image
+            description = describe_clothing_items(
+                [processed_path],
+                progress_callback=None
+            )
+
+            if description and len(description) > 0:
+                return jsonify({
+                    'success': True,
+                    'filename': filename,
+                    'description': description[0]['description']
+                })
+            else:
+                return jsonify({'error': 'Failed to describe image'}), 500
+
+        finally:
+            # Clean up temp directory
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    except Exception as e:
+        print(f"Error in describe_image: {e}")
+        traceback.print_exc()
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 
 @app.route('/api/session/<session_id>', methods=['GET'])

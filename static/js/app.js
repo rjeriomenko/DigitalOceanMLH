@@ -5,6 +5,10 @@ let socket = null;
 let socketId = null;
 let sessionId = null;
 
+// Pre-processing cache: Map of filename -> description
+let imageDescriptions = new Map();
+let preprocessingInProgress = false;
+
 // ===== DOM Elements =====
 const selfieInput = document.getElementById('selfie');
 const clothingInput = document.getElementById('clothing');
@@ -20,6 +24,9 @@ const progressSection = document.getElementById('progress-section');
 const progressBar = document.getElementById('progress-bar');
 const progressFill = document.getElementById('progress-fill');
 const progressText = document.getElementById('progress-text');
+const preprocessingSection = document.getElementById('preprocessing-section');
+const preprocessingFill = document.getElementById('preprocessing-fill');
+const preprocessingText = document.getElementById('preprocessing-text');
 
 // ===== WebSocket Setup =====
 function initWebSocket() {
@@ -114,7 +121,7 @@ selfieInput.addEventListener('change', (e) => {
     }
 });
 
-clothingInput.addEventListener('change', (e) => {
+clothingInput.addEventListener('change', async (e) => {
     clothingFiles = Array.from(e.target.files);
     displayClothingPreviews(clothingFiles);
     updateFileLabel(clothingInput, `${clothingFiles.length} file(s) selected`);
@@ -122,6 +129,8 @@ clothingInput.addEventListener('change', (e) => {
     document.getElementById('clear-clothing-btn').style.display = 'inline-block';
     // Update button text
     updateGenerateButtonText();
+    // Start pre-processing images immediately
+    preprocessImages(clothingFiles);
 });
 
 // Update button text based on whether images are uploaded
@@ -177,6 +186,86 @@ async function displaySelfiePreview(file) {
             <button class="remove-btn" onclick="removeSelfie()">×</button>
         `;
     }
+}
+
+// ===== Pre-processing Functions =====
+async function preprocessImages(files) {
+    if (preprocessingInProgress || files.length === 0) {
+        return;
+    }
+
+    preprocessingInProgress = true;
+    preprocessingSection.style.display = 'block';
+
+    let completed = 0;
+    const total = files.length;
+
+    // De-duplicate files by name
+    const uniqueFiles = new Map();
+    for (const file of files) {
+        if (!uniqueFiles.has(file.name)) {
+            uniqueFiles.set(file.name, file);
+        }
+    }
+
+    const filesToProcess = Array.from(uniqueFiles.values());
+
+    try {
+        // Process files in parallel (limited to 3 at a time to avoid overwhelming the server)
+        const batchSize = 3;
+        for (let i = 0; i < filesToProcess.length; i += batchSize) {
+            const batch = filesToProcess.slice(i, i + batchSize);
+
+            await Promise.all(batch.map(async (file) => {
+                // Skip if already cached
+                if (imageDescriptions.has(file.name)) {
+                    completed++;
+                    updatePreprocessingProgress(completed, total);
+                    return;
+                }
+
+                try {
+                    const formData = new FormData();
+                    formData.append('image', file);
+                    formData.append('filename', file.name);
+
+                    const response = await fetch('/api/describe-image', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success) {
+                            imageDescriptions.set(file.name, data.description);
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error preprocessing ${file.name}:`, error);
+                }
+
+                completed++;
+                updatePreprocessingProgress(completed, total);
+            }));
+        }
+
+        // Hide preprocessing section after a short delay
+        setTimeout(() => {
+            preprocessingSection.style.display = 'none';
+            preprocessingInProgress = false;
+        }, 500);
+
+    } catch (error) {
+        console.error('Error during preprocessing:', error);
+        preprocessingSection.style.display = 'none';
+        preprocessingInProgress = false;
+    }
+}
+
+function updatePreprocessingProgress(completed, total) {
+    const percent = Math.round((completed / total) * 100);
+    preprocessingFill.style.width = `${percent}%`;
+    preprocessingText.textContent = `Analyzed ${completed}/${total} images...`;
 }
 
 async function displayClothingPreviews(files) {
@@ -246,11 +335,17 @@ async function getImagePreviewUrl(file) {
     if (isHEIC && typeof heic2any !== 'undefined') {
         // Convert HEIC to JPEG using heic2any library
         try {
-            const convertedBlob = await heic2any({
+            let convertedBlob = await heic2any({
                 blob: file,
                 toType: 'image/jpeg',
                 quality: 0.8
             });
+
+            // heic2any might return an array of blobs, take the first one
+            if (Array.isArray(convertedBlob)) {
+                convertedBlob = convertedBlob[0];
+            }
+
             return URL.createObjectURL(convertedBlob);
         } catch (error) {
             console.error('HEIC conversion failed:', error);
@@ -434,10 +529,30 @@ generateBtn.addEventListener('click', async () => {
         // Build form data
         const formData = new FormData();
 
-        // Add clothing images
+        // Add clothing images (de-duplicated by filename)
+        const uniqueFiles = new Map();
         clothingFiles.forEach(file => {
+            if (!uniqueFiles.has(file.name)) {
+                uniqueFiles.set(file.name, file);
+            }
+        });
+
+        const filesToSubmit = Array.from(uniqueFiles.values());
+        filesToSubmit.forEach(file => {
             formData.append('clothing_images', file);
         });
+
+        // Add pre-computed descriptions if available (only for selected files)
+        const precomputedDescriptions = {};
+        filesToSubmit.forEach((file, index) => {
+            if (imageDescriptions.has(file.name)) {
+                precomputedDescriptions[index] = imageDescriptions.get(file.name);
+            }
+        });
+
+        if (Object.keys(precomputedDescriptions).length > 0) {
+            formData.append('precomputed_descriptions', JSON.stringify(precomputedDescriptions));
+        }
 
         // Add selfie if provided
         if (selfieFile) {
@@ -511,29 +626,30 @@ function createAssistantPlaceholder(data) {
     // Show chat history
     chatHistory.style.display = 'block';
 
-    // Remove welcome placeholder if it exists
-    const placeholder = chatMessages.querySelector('.chat-placeholder');
-    if (placeholder) {
-        placeholder.remove();
+    // COMPLETELY REMOVE welcome placeholder (not reuse it!)
+    const welcomePlaceholder = chatMessages.querySelector('.chat-placeholder');
+    if (welcomePlaceholder) {
+        welcomePlaceholder.remove();
     }
 
+    // Create NEW placeholder with loading dots
     const messageDiv = document.createElement('div');
     messageDiv.className = 'chat-message assistant-placeholder';
 
     const assistantBubble = document.createElement('div');
     assistantBubble.className = 'chat-message-assistant';
 
-    let bubbleHTML = '<div class="message-label">Fashion AI</div>';
+    // Just show loading dots, no content yet
+    assistantBubble.innerHTML = `
+        <div class="message-label">Fashion AI</div>
+        <div class="loading-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div class="outfits-grid"></div>
+    `;
 
-    // Add query response if exists
-    if (data.query_response) {
-        bubbleHTML += `<div class="message-text">${escapeHtml(data.query_response)}</div>`;
-    }
-
-    // Add empty outfits grid for live updates
-    bubbleHTML += '<div class="outfits-grid"></div>';
-
-    assistantBubble.innerHTML = bubbleHTML;
     messageDiv.appendChild(assistantBubble);
     chatMessages.appendChild(messageDiv);
 
@@ -572,56 +688,81 @@ function addChatMessage(role, content) {
         `;
         messageDiv.appendChild(userBubble);
     } else if (role === 'assistant') {
-        // Assistant message with outfits
-        const assistantBubble = document.createElement('div');
-        assistantBubble.className = 'chat-message-assistant';
+        // If updating existing placeholder, get it and update content
+        if (existingAssistantPlaceholder) {
+            const assistantBubble = existingAssistantPlaceholder.querySelector('.chat-message-assistant');
 
-        let bubbleHTML = '<div class="message-label">Fashion AI</div>';
+            // Remove loading dots
+            const loadingDots = assistantBubble.querySelector('.loading-dots');
+            if (loadingDots) {
+                loadingDots.remove();
+            }
 
-        // Add query response if exists
-        if (content.query_response) {
-            bubbleHTML += `<div class="message-text">${escapeHtml(content.query_response)}</div>`;
-        }
+            let bubbleHTML = '<div class="message-label">Fashion AI</div>';
 
-        // Add outfits grid
-        if (content.outfits && content.outfits.length > 0) {
-            bubbleHTML += '<div class="outfits-grid"></div>';
-        }
+            // Add query response if exists
+            if (content.query_response) {
+                bubbleHTML += `<div class="message-text">${escapeHtml(content.query_response)}</div>`;
+            }
 
-        assistantBubble.innerHTML = bubbleHTML;
+            // Add outfits grid
+            if (content.outfits && content.outfits.length > 0) {
+                bubbleHTML += '<div class="outfits-grid"></div>';
+            }
 
-        // Add outfit cards
-        if (content.outfits && content.outfits.length > 0) {
-            const outfitsGrid = assistantBubble.querySelector('.outfits-grid');
+            assistantBubble.innerHTML = bubbleHTML;
+        } else {
+            // Create new message bubble
+            const assistantBubble = document.createElement('div');
+            assistantBubble.className = 'chat-message-assistant';
 
-            content.outfits.forEach(outfit => {
-                // Check if card already exists from live preview
-                let existingCard = outfitsGrid.querySelector(`[data-outfit-number="${outfit.outfit_number}"]`);
+            let bubbleHTML = '<div class="message-label">Fashion AI</div>';
 
-                if (existingCard) {
-                    // Update the existing card with full details
-                    const reasoningP = existingCard.querySelector('.outfit-reasoning');
-                    const wearingP = existingCard.querySelector('.outfit-wearing');
+            // Add query response if exists
+            if (content.query_response) {
+                bubbleHTML += `<div class="message-text">${escapeHtml(content.query_response)}</div>`;
+            }
 
-                    if (reasoningP) reasoningP.textContent = outfit.reasoning;
-                    if (wearingP) wearingP.textContent = outfit.wearing_instructions;
+            // Add outfits grid
+            if (content.outfits && content.outfits.length > 0) {
+                bubbleHTML += '<div class="outfits-grid"></div>';
+            }
 
-                    // Handle errors
-                    if (outfit.error && !outfit.image_url) {
-                        const errorDiv = document.createElement('div');
-                        errorDiv.className = 'outfit-error';
-                        errorDiv.textContent = `Error: ${outfit.error}`;
-                        existingCard.appendChild(errorDiv);
+            assistantBubble.innerHTML = bubbleHTML;
+
+            // Add outfit cards
+            if (content.outfits && content.outfits.length > 0) {
+                const outfitsGrid = assistantBubble.querySelector('.outfits-grid');
+
+                content.outfits.forEach(outfit => {
+                    // Check if card already exists from live preview
+                    let existingCard = outfitsGrid.querySelector(`[data-outfit-number="${outfit.outfit_number}"]`);
+
+                    if (existingCard) {
+                        // Update the existing card with full details
+                        const reasoningP = existingCard.querySelector('.outfit-reasoning');
+                        const wearingP = existingCard.querySelector('.outfit-wearing');
+
+                        if (reasoningP) reasoningP.textContent = outfit.reasoning;
+                        if (wearingP) wearingP.textContent = outfit.wearing_instructions;
+
+                        // Handle errors
+                        if (outfit.error && !outfit.image_url) {
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'outfit-error';
+                            errorDiv.textContent = `Error: ${outfit.error}`;
+                            existingCard.appendChild(errorDiv);
+                        }
+                    } else {
+                        // Create new card if it doesn't exist (shouldn't happen with live preview)
+                        const card = createOutfitCard(outfit);
+                        outfitsGrid.appendChild(card);
                     }
-                } else {
-                    // Create new card if it doesn't exist (shouldn't happen with live preview)
-                    const card = createOutfitCard(outfit);
-                    outfitsGrid.appendChild(card);
-                }
-            });
-        }
+                });
+            }
 
-        messageDiv.appendChild(assistantBubble);
+            messageDiv.appendChild(assistantBubble);
+        }
     }
 
     // Only append if it's a new message
