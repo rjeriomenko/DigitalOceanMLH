@@ -1,0 +1,5 @@
+# DigitalOcean Gradient Python SDK
+gradient>=1.0.0
+
+# For improved async performance
+aiohttp>=3.9.0
