@@ -62,9 +62,65 @@ function initWebSocket() {
     });
 }
 
+// ===== Unsplash Carousel =====
+const unsplashImages = [
+    'corey-saldana-pIKQbdSzF_k-unsplash.jpg',
+    'emmanuel-akinte-ryfMb5hF4mg-unsplash.jpg',
+    'hamza-nouasria-owpsBDBK5nY-unsplash.jpg',
+    'joao-vitor-duarte-pbHk4grW63Q-unsplash.jpg',
+    'jon-ly-Xn7GvimQrk8-unsplash.jpg',
+    'joshua-rawson-harris-haUQC3eto2s-unsplash.jpg',
+    'karsten-winegeart-UicC_FIozPc-unsplash.jpg',
+    'majid-akbari-Egj4Dg107kc-unsplash.jpg',
+    'mike-von-V4cl7_0N2mc-unsplash.jpg',
+    'ospan-ali-nyrSsBzhZ4Y-unsplash.jpg',
+    'vic-domic-RvYwaBjo83M-unsplash.jpg',
+    'zahir-namane-TjUJJACTav4-unsplash.jpg'
+];
+
+let carouselInterval = null;
+let leftIndex = 0;
+let rightIndex = 6;
+
+function startCarousel() {
+    const leftSide = document.querySelector('.carousel-left');
+    const rightSide = document.querySelector('.carousel-right');
+
+    // Set initial images
+    leftSide.style.backgroundImage = `url('/unsplash/${unsplashImages[leftIndex]}')`;
+    rightSide.style.backgroundImage = `url('/unsplash/${unsplashImages[rightIndex]}')`;
+
+    // Carousel loop: display - wait 2s - scroll to next
+    carouselInterval = setInterval(() => {
+        leftIndex = (leftIndex + 1) % 6;
+        rightIndex = 6 + ((rightIndex - 6 + 1) % 6);
+
+        leftSide.style.backgroundImage = `url('/unsplash/${unsplashImages[leftIndex]}')`;
+        rightSide.style.backgroundImage = `url('/unsplash/${unsplashImages[rightIndex]}')`;
+    }, 2000);
+}
+
+function stopCarousel() {
+    if (carouselInterval) {
+        clearInterval(carouselInterval);
+        carouselInterval = null;
+    }
+
+    // Fade out carousel
+    const carousel = document.querySelector('.background-carousel');
+    if (carousel) {
+        carousel.style.transition = 'opacity 3s ease-in-out';
+        carousel.style.opacity = '0';
+        setTimeout(() => {
+            carousel.style.display = 'none';
+        }, 3000);
+    }
+}
+
 // Initialize WebSocket on load
 document.addEventListener('DOMContentLoaded', () => {
     initWebSocket();
+    startCarousel();
     loadLocationWeatherBackground();
 });
 
@@ -139,6 +195,9 @@ async function loadLocationWeatherBackground() {
 }
 
 function applyBackground(imageUrl, location, weather) {
+    // Stop the carousel before showing weather background
+    stopCarousel();
+
     // Create background element
     const bgDiv = document.createElement('div');
     bgDiv.className = 'dynamic-background';
@@ -148,10 +207,10 @@ function applyBackground(imageUrl, location, weather) {
     // Insert as first child of body
     document.body.insertBefore(bgDiv, document.body.firstChild);
 
-    // Fade in slowly
+    // Fade in slowly after carousel fades out
     setTimeout(() => {
         bgDiv.style.opacity = '1';
-    }, 100);
+    }, 3100);
 
     // Add location indicator
     const locationTag = document.createElement('div');

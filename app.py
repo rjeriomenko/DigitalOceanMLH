@@ -557,6 +557,13 @@ def serve_output(filename):
     return send_from_directory(app.config['OUTPUT_FOLDER'], filename)
 
 
+@app.route('/unsplash/<filename>')
+def serve_unsplash(filename):
+    """Serve Unsplash background images"""
+    unsplash_dir = os.path.join(os.path.dirname(__file__), 'unsplash')
+    return send_from_directory(unsplash_dir, filename)
+
+
 @app.route('/api/convert-heic', methods=['POST'])
 def convert_heic():
     """

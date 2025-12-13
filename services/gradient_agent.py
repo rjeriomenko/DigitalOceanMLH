@@ -80,11 +80,11 @@ IMPORTANT STYLING INSTRUCTIONS:
 
 {items_text}{person_context}{extra_instructions}
 
-Based on your expertise as a fashion stylist, please create 1-6 DIFFERENT outfit combinations.
+Based on your expertise as a fashion stylist, please create 1-12 DIFFERENT outfit combinations.
 
 REQUIREMENTS:
 - Create AT LEAST 1 outfit (always required)
-- Create UP TO 6 outfits total if there are enough suitable items
+- Create UP TO 12 outfits total if there are enough suitable items
 - Each outfit should have 3-5 items
 - You can use ONLY wardrobe items, OR mix wardrobe items with what they're currently wearing
 - Outfits should be distinct from each other (different styles, occasions, or color schemes)
@@ -162,7 +162,7 @@ INCORRECT Examples:
 - DO NOT skip the WEAR: line
 - DO NOT write vague wear instructions like "wear normally"
 
-Remember: Create 1-6 distinct outfits with DETAILED wearing instructions. Always label them as OUTFIT 1:, OUTFIT 2:, etc."""
+Remember: Create 1-12 distinct outfits with DETAILED wearing instructions. Always label them as OUTFIT 1:, OUTFIT 2:, etc. Continue with OUTFIT 7:, OUTFIT 8:, OUTFIT 9:, OUTFIT 10:, OUTFIT 11:, OUTFIT 12: if you have enough variety."""
 
     print("\nConsulting fashion agent for outfit selection...")
 
