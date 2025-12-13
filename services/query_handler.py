@@ -9,7 +9,7 @@ import os
 from gradient import Gradient
 
 
-def handle_query(query, clothing_descriptions, person_description=None, agent_access_key=None, agent_endpoint=None):
+def handle_query(query, clothing_descriptions, person_description=None, conversation_history=None, agent_access_key=None, agent_endpoint=None):
     """
     Process a user query to determine if it's a question or instruction.
 
@@ -17,6 +17,7 @@ def handle_query(query, clothing_descriptions, person_description=None, agent_ac
         query: User's text query
         clothing_descriptions: List of clothing item descriptions
         person_description: Optional person description from selfie
+        conversation_history: Optional list of previous messages in Gradient format
         agent_access_key: Agent access key (optional, reads from env)
         agent_endpoint: Agent endpoint URL (optional, reads from env)
 
@@ -97,9 +98,18 @@ Now process the user's query."""
             agent_endpoint=agent_endpoint
         )
 
+        # Build messages with conversation history
+        messages = []
+        if conversation_history:
+            # Add previous conversation for context
+            messages.extend(conversation_history)
+
+        # Add current prompt
+        messages.append({"role": "user", "content": prompt})
+
         # Get response
         response = agent_client.agents.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             model="llama3.3-70b-instruct"
         )
 

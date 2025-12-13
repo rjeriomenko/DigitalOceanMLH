@@ -14,11 +14,16 @@
     <div class="vertical-text vertical-text-right">ION</div>
 
     <div class="container">
+        <!-- Mobile header with FASH/ION -->
+        <div class="mobile-header">
+            <span class="vertical-text vertical-text-left">FASH</span>
+            <span class="vertical-text vertical-text-right">ION</span>
+        </div>
+
         <!-- Main Content -->
         <main class="main-content">
             <!-- Chat History Section (scrollable) -->
             <section id="chat-history" class="chat-history">
-                <h2 class="chat-title">💬 Conversation History</h2>
                 <div id="chat-messages" class="chat-messages">
                     <div class="chat-message chat-placeholder">
                         <div class="chat-message-assistant">
@@ -56,24 +61,24 @@
 
                 <div class="input-group">
                     <label for="selfie" class="label">
-                        <span class="emoji">🤳</span> Your Selfie (Optional - for personalized outfits)
+                        <span class="emoji">🤳</span> Selfies (0-3 images)
                     </label>
                     <div class="file-input-wrapper">
-                        <input type="file" id="selfie" accept="image/*" class="file-input">
+                        <input type="file" id="selfie" accept="image/*" multiple class="file-input">
                         <label for="selfie" class="file-label">
-                            <span class="file-label-text">Choose selfie...</span>
+                            <span class="file-label-text">Choose selfies...</span>
                         </label>
-                        <button type="button" id="clear-selfie-btn" class="btn-clear" style="display: none;" onclick="clearSelfie()">Clear Selfie</button>
+                        <button type="button" id="clear-selfie-btn" class="btn-clear" style="display: none;" onclick="clearSelfie()">Clear Selfies</button>
                         <div id="selfie-preview" class="preview-container"></div>
                     </div>
                 </div>
 
                 <div class="input-group">
-                    <label for="clothing" class="label required">
-                        <span class="emoji">👕</span> Clothing Items (1-20 images)
+                    <label for="clothing" class="label">
+                        <span class="emoji">👕</span> Clothing Images (0-30 images)
                     </label>
                     <div class="file-input-wrapper">
-                        <input type="file" id="clothing" accept="image/*" multiple class="file-input" required>
+                        <input type="file" id="clothing" accept="image/*" multiple class="file-input">
                         <label for="clothing" class="file-label">
                             <span class="file-label-text">Choose clothing images...</span>
                         </label>

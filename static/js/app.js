@@ -1,5 +1,5 @@
 // ===== State Management =====
-let selfieFile = null;
+let selfieFiles = [];
 let clothingFiles = [];
 let socket = null;
 let socketId = null;
@@ -68,11 +68,51 @@ document.addEventListener('DOMContentLoaded', () => {
     loadLocationWeatherBackground();
 });
 
+// ===== GPS Geolocation =====
+async function getUserLocation() {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject(new Error('Geolocation not supported'));
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                resolve({
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude
+                });
+            },
+            (error) => {
+                console.warn('Geolocation error:', error);
+                reject(error);
+            },
+            {
+                enableHighAccuracy: false,
+                timeout: 5000,
+                maximumAge: 300000 // 5 minutes cache
+            }
+        );
+    });
+}
+
 // ===== Location, Weather, and Background =====
 async function loadLocationWeatherBackground() {
     try {
-        // Fetch location and weather
-        const response = await fetch('/api/location-weather');
+        // Try to get GPS location first
+        let coords = null;
+        try {
+            coords = await getUserLocation();
+            console.log('Got GPS coordinates:', coords);
+        } catch (gpsError) {
+            console.log('GPS unavailable, falling back to IP-based location');
+        }
+
+        // Fetch location and weather (pass GPS coords if available)
+        const url = coords
+            ? `/api/location-weather?lat=${coords.latitude}&lon=${coords.longitude}`
+            : '/api/location-weather';
+        const response = await fetch(url);
         const data = await response.json();
 
         console.log('Location/Weather:', data);
@@ -172,11 +212,19 @@ function updateProgress(data) {
 
 // ===== File Input Handlers =====
 selfieInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        selfieFile = file;
-        displaySelfiePreview(file);
-        updateFileLabel(selfieInput, file.name);
+    const files = Array.from(e.target.files);
+
+    // Limit to 3 selfies
+    if (files.length > 3) {
+        alert('Maximum 3 selfies allowed. Only the first 3 will be used.');
+        selfieFiles = files.slice(0, 3);
+    } else {
+        selfieFiles = files;
+    }
+
+    if (selfieFiles.length > 0) {
+        displaySelfiePreview(selfieFiles);
+        updateFileLabel(selfieInput, `${selfieFiles.length} selfie(s) selected`);
         // Show clear button
         document.getElementById('clear-selfie-btn').style.display = 'inline-block';
     }
@@ -211,41 +259,53 @@ function updateFileLabel(input, text) {
 }
 
 // ===== Display Previews =====
-async function displaySelfiePreview(file) {
+async function displaySelfiePreview(files) {
     selfiePreview.innerHTML = '';
 
-    // Show loading placeholder immediately
-    const placeholderDiv = document.createElement('div');
-    placeholderDiv.className = 'preview-item preview-loading';
-    placeholderDiv.innerHTML = `
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-            <span style="font-size:2rem;">📷</span>
-            <span style="font-size:0.7rem;color:white;margin-top:5px;">Converting...</span>
-        </div>
-        <button class="remove-btn" onclick="removeSelfie()">×</button>
-    `;
-    selfiePreview.appendChild(placeholderDiv);
+    // Handle multiple selfies
+    for (let index = 0; index < files.length; index++) {
+        const file = files[index];
 
+        // Show loading placeholder immediately
+        const placeholderDiv = document.createElement('div');
+        placeholderDiv.className = 'preview-item preview-loading';
+        placeholderDiv.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <span style="font-size:2rem;">📷</span>
+                <span style="font-size:0.7rem;color:white;margin-top:5px;">Converting...</span>
+            </div>
+            <button class="remove-btn" onclick="removeSelfie(${index})">×</button>
+        `;
+        selfiePreview.appendChild(placeholderDiv);
+
+        // Convert async
+        convertAndDisplaySelfie(file, index, placeholderDiv);
+    }
+}
+
+async function convertAndDisplaySelfie(file, index, placeholderDiv) {
     try {
         const imageUrl = await getImagePreviewUrl(file);
         // Replace placeholder with actual image
-        const div = document.createElement('div');
-        div.className = 'preview-item';
-        div.innerHTML = `
-            <img src="${imageUrl}" alt="Selfie preview">
-            <button class="remove-btn" onclick="removeSelfie()">×</button>
-        `;
-        selfiePreview.innerHTML = '';
-        selfiePreview.appendChild(div);
+        if (placeholderDiv.parentNode) {
+            placeholderDiv.className = 'preview-item';
+            placeholderDiv.innerHTML = `
+                <img src="${imageUrl}" alt="Selfie ${index + 1}">
+                <button class="remove-btn" onclick="removeSelfie(${index})">×</button>
+            `;
+        }
     } catch (error) {
         console.error('Error displaying selfie preview:', error);
         // Show error placeholder
-        placeholderDiv.innerHTML = `
-            <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#ffebee;">
-                <span style="font-size:1.5rem;">⚠️</span>
-            </div>
-            <button class="remove-btn" onclick="removeSelfie()">×</button>
-        `;
+        if (placeholderDiv.parentNode) {
+            placeholderDiv.className = 'preview-item';
+            placeholderDiv.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#ffebee;">
+                    <span style="font-size:1.5rem;">⚠️</span>
+                </div>
+                <button class="remove-btn" onclick="removeSelfie(${index})">×</button>
+            `;
+        }
     }
 }
 
@@ -448,16 +508,41 @@ async function getImagePreviewUrl(file) {
 }
 
 // ===== Remove Functions =====
-function removeSelfie() {
-    selfieFile = null;
-    selfieInput.value = '';
-    selfiePreview.innerHTML = '';
-    updateFileLabel(selfieInput, 'Choose selfie...');
-    document.getElementById('clear-selfie-btn').style.display = 'none';
+function removeSelfie(index) {
+    // Remove from array
+    selfieFiles.splice(index, 1);
+
+    // Remove only the specific preview item
+    const previewItems = selfiePreview.querySelectorAll('.preview-item');
+    if (previewItems[index]) {
+        previewItems[index].remove();
+    }
+
+    // Update indices on remaining remove buttons
+    const remainingItems = selfiePreview.querySelectorAll('.preview-item');
+    remainingItems.forEach((item, newIndex) => {
+        const removeBtn = item.querySelector('.remove-btn');
+        if (removeBtn) {
+            removeBtn.setAttribute('onclick', `removeSelfie(${newIndex})`);
+        }
+    });
+
+    // Update label and clear button visibility
+    if (selfieFiles.length === 0) {
+        selfieInput.value = '';
+        updateFileLabel(selfieInput, 'Choose selfies...');
+        document.getElementById('clear-selfie-btn').style.display = 'none';
+    } else {
+        updateFileLabel(selfieInput, `${selfieFiles.length} selfie(s) selected`);
+    }
 }
 
 function clearSelfie() {
-    removeSelfie();
+    selfieFiles = [];
+    selfieInput.value = '';
+    selfiePreview.innerHTML = '';
+    updateFileLabel(selfieInput, 'Choose selfies...');
+    document.getElementById('clear-selfie-btn').style.display = 'none';
 }
 
 function removeClothing(index) {
@@ -651,9 +736,11 @@ generateBtn.addEventListener('click', async () => {
             formData.append('precomputed_descriptions', JSON.stringify(precomputedDescriptions));
         }
 
-        // Add selfie if provided
-        if (selfieFile) {
-            formData.append('selfie', selfieFile);
+        // Add selfies if provided (up to 3)
+        if (selfieFiles && selfieFiles.length > 0) {
+            selfieFiles.forEach((file, index) => {
+                formData.append('selfies', file);
+            });
         }
 
         // Add query if provided
@@ -906,11 +993,29 @@ function createOutfitCard(outfit) {
         const details = document.createElement('div');
         details.className = 'outfit-details';
 
-        details.innerHTML = `
+        // Add clothing item thumbnails if available
+        if (outfit.clothing_items && outfit.clothing_items.length > 0) {
+            const thumbnailsContainer = document.createElement('div');
+            thumbnailsContainer.className = 'outfit-thumbnails';
+
+            outfit.clothing_items.forEach((itemPath, idx) => {
+                const thumbnail = document.createElement('img');
+                thumbnail.className = 'outfit-thumbnail';
+                thumbnail.src = itemPath;
+                thumbnail.alt = `Item ${idx + 1}`;
+                thumbnail.loading = 'lazy';
+                thumbnailsContainer.appendChild(thumbnail);
+            });
+
+            details.appendChild(thumbnailsContainer);
+        }
+
+        details.innerHTML += `
             <h4>Style</h4>
             <p>${outfit.reasoning}</p>
             <h4>How to Wear</h4>
             <p>${outfit.wearing_instructions}</p>
+            ${outfit.fashion_advice ? `<h4>Fashion Tip</h4><p class="fashion-advice">💡 ${outfit.fashion_advice}</p>` : ''}
         `;
         card.appendChild(details);
     } else if (outfit.error) {

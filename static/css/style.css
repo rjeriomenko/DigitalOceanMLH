@@ -111,13 +111,13 @@ body {
 .vertical-text {
     position: fixed;
     writing-mode: vertical-rl;
-    font-size: 12rem;
+    font-size: 15rem;
     font-weight: 900;
-    letter-spacing: -12px;
+    letter-spacing: -15px;
     line-height: 0.8;
     color: white;
     text-shadow: 3px 3px 12px rgba(0, 0, 0, 0.4);
-    padding: 40px 30px;
+    padding: 40px 35px;
     font-family: 'Impact', 'Arial Black', sans-serif;
     text-transform: uppercase;
     z-index: 5;
@@ -135,19 +135,65 @@ body {
 }
 
 /* Responsive adjustments */
-@media (max-width: 1200px) {
+@media (max-width: 1400px) {
     .vertical-text {
-        font-size: 8rem;
-        letter-spacing: -8px;
-        padding: 30px 20px;
+        font-size: 12rem;
+        letter-spacing: -12px;
+        padding: 35px 30px;
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1200px) {
     .vertical-text {
-        font-size: 5rem;
-        letter-spacing: -5px;
-        padding: 20px 15px;
+        font-size: 10rem;
+        letter-spacing: -10px;
+        padding: 30px 25px;
+    }
+}
+
+@media (max-width: 1024px) {
+    .vertical-text {
+        font-size: 8rem;
+        letter-spacing: -8px;
+        padding: 25px 20px;
+    }
+}
+
+/* Mobile header container */
+.mobile-header {
+    display: none;
+}
+
+/* Mobile: Move FASH/ION inside main block */
+@media (max-width: 768px) {
+    /* Hide fixed vertical text on mobile */
+    body > .vertical-text {
+        display: none;
+    }
+
+    /* Show mobile header */
+    .mobile-header {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px 0;
+        gap: 20px;
+    }
+
+    .mobile-header .vertical-text {
+        position: static;
+        display: inline-block;
+        writing-mode: horizontal-tb;
+        font-size: 4rem;
+        letter-spacing: -4px;
+        padding: 10px 20px;
+        transform: none !important;
+        margin: 0;
+    }
+
+    /* Hide location tag on mobile */
+    .location-tag {
+        display: none !important;
     }
 }
 
@@ -352,7 +398,7 @@ body {
 .upload-section {
     display: flex;
     flex-direction: column;
-    gap: 25px;
+    gap: 15px;
 }
 
 .input-group {
@@ -525,16 +571,18 @@ textarea:focus {
 }
 
 .btn-clear {
-    padding: 8px 16px;
+    padding: 6px 12px;
     background: var(--error);
     color: white;
     border: none;
     border-radius: var(--radius-sm);
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
     margin-top: 10px;
+    width: auto;
+    display: inline-block;
 }
 
 .btn-clear:hover {
@@ -691,6 +739,33 @@ textarea:focus {
     box-shadow: 0 10px 25px var(--shadow);
 }
 
+/* Outfit Thumbnails */
+.outfit-thumbnails {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: var(--radius-sm);
+}
+
+.outfit-thumbnail {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid var(--border);
+    transition: transform 0.2s, border-color 0.2s;
+    cursor: pointer;
+}
+
+.outfit-thumbnail:hover {
+    transform: scale(1.1);
+    border-color: var(--primary);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
 /* 3D Card Magnified View */
 .outfit-card-magnified {
     position: fixed;
@@ -749,6 +824,15 @@ textarea:focus {
     color: var(--text-muted);
     line-height: 1.6;
     margin-bottom: 15px;
+}
+
+.fashion-advice {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 165, 0, 0.1));
+    border-left: 3px solid #ffa500;
+    padding: 12px 15px;
+    border-radius: 8px;
+    font-style: italic;
+    color: var(--text) !important;
 }
 
 .outfit-error {

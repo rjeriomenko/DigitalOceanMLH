@@ -175,8 +175,8 @@ def generate_outfits():
             emit_progress(socket_sid, "error", "Please provide clothing images or a question", 0)
             return jsonify({'error': 'Please provide clothing images or a question'}), 400
 
-        # Get optional selfie
-        selfie_file = request.files.get('selfie')
+        # Get optional selfies (up to 3)
+        selfie_files = request.files.getlist('selfies')
 
         # Get or create session
         session, is_new_session = session_manager.get_or_create_session(session_id if session_id else None)
@@ -201,8 +201,9 @@ def generate_outfits():
                 # Add query to session history
                 session.add_message("user", query)
 
-                # Get text-only response from query handler
-                query_result = handle_query(query, [], None)
+                # Get text-only response from query handler with conversation history
+                conversation_history = session.get_gradient_messages() if session else []
+                query_result = handle_query(query, [], None, conversation_history=conversation_history)
 
                 query_response = None
                 if query_result['type'] == 'question':
@@ -262,46 +263,64 @@ def generate_outfits():
 
             clothing_paths = [img.saved_path for img in clothing_images]
 
-            # Save and validate selfie if provided
-            selfie_image = None
-            selfie_path = None
+            # Save and validate selfies if provided (up to 3)
+            selfie_images = []
+            selfie_paths = []
             person_description = None
 
-            if selfie_file and selfie_file.filename:
-                emit_progress(socket_sid, "analyzing_selfie", "Analyzing your selfie...", 15)
+            if selfie_files and len(selfie_files) > 0:
+                # Limit to 3 selfies
+                selfie_files = selfie_files[:3]
+                emit_progress(socket_sid, "analyzing_selfie", f"Analyzing {len(selfie_files)} selfie(s)...", 15)
 
-                original_name = secure_filename(selfie_file.filename) if selfie_file.filename else "selfie.jpg"
-                if not original_name or original_name == '':
-                    original_name = "selfie.jpg"
+                person_descriptions = []
 
-                filepath = os.path.join(temp_dir, f"selfie_{original_name}")
-                selfie_file.save(filepath)
+                for idx, selfie_file in enumerate(selfie_files):
+                    if not selfie_file.filename:
+                        continue
 
-                try:
-                    processed_path, mime_type = validate_and_prepare_image(filepath)
+                    original_name = secure_filename(selfie_file.filename) if selfie_file.filename else f"selfie_{idx}.jpg"
+                    if not original_name or original_name == '':
+                        original_name = f"selfie_{idx}.jpg"
 
-                    selfie_image = UploadedImage(
-                        original_filename=selfie_file.filename or original_name,
-                        saved_path=processed_path,
-                        mime_type=mime_type,
-                        file_size=os.path.getsize(processed_path),
-                        image_type="selfie"
-                    )
-                    selfie_path = selfie_image.saved_path
+                    filepath = os.path.join(temp_dir, f"selfie_{idx}_{original_name}")
+                    selfie_file.save(filepath)
 
-                    # Describe the person
-                    person_description = describe_person_appearance(selfie_path)
+                    try:
+                        processed_path, mime_type = validate_and_prepare_image(filepath)
+
+                        selfie_image = UploadedImage(
+                            original_filename=selfie_file.filename or original_name,
+                            saved_path=processed_path,
+                            mime_type=mime_type,
+                            file_size=os.path.getsize(processed_path),
+                            image_type="selfie"
+                        )
+                        selfie_images.append(selfie_image)
+                        selfie_paths.append(selfie_image.saved_path)
+
+                        # Describe the person in this selfie
+                        description = describe_person_appearance(selfie_image.saved_path)
+                        person_descriptions.append(description)
+
+                    except Exception as e:
+                        print(f"Error processing selfie {idx}: {e}")
+                        # Continue with other selfies
+
+                # Combine all person descriptions
+                if person_descriptions:
+                    person_description = "\n\n".join([
+                        f"Photo {idx + 1}: {desc}"
+                        for idx, desc in enumerate(person_descriptions)
+                    ])
 
                     emit_progress(
                         socket_sid,
                         "analyzing_selfie",
-                        "Selfie analyzed successfully",
+                        f"{len(selfie_images)} selfie(s) analyzed successfully",
                         20,
-                        {"person_description": person_description[:100] + "..."}
+                        {"person_description": person_description[:150] + "..."}
                     )
-                except Exception as e:
-                    print(f"Error processing selfie: {e}")
-                    # Continue without selfie
 
             # Describe clothing items with per-item progress
             # Use precomputed descriptions if available
@@ -380,10 +399,14 @@ def generate_outfits():
 
                 emit_progress(socket_sid, "consulting_agent", "Processing your query...", 45)
 
+                # Get conversation history for context
+                conversation_history = session.get_gradient_messages() if session else []
+
                 query_result = handle_query(
                     query,
                     clothing_descriptions,
-                    person_description
+                    person_description,
+                    conversation_history=conversation_history
                 )
 
                 if query_result['type'] == 'question':
@@ -480,6 +503,13 @@ def generate_outfits():
                     'wearing_instructions': result.get('wearing_instructions', 'N/A')
                 }
 
+                # Add clothing item paths for thumbnails
+                if result.get('selected_paths'):
+                    outfit_data['clothing_items'] = [
+                        f'/output/{os.path.basename(path)}' if not path.startswith('/output/') else path
+                        for path in result['selected_paths']
+                    ]
+
                 if result.get('generated_image_path'):
                     image_filename = os.path.basename(result['generated_image_path'])
                     outfit_data['image_url'] = f'/output/{image_filename}'
@@ -487,6 +517,14 @@ def generate_outfits():
                     outfit_data['error'] = result['error']
 
                 response_data['outfits'].append(outfit_data)
+
+            # Add generated outfits to session history for future reference
+            outfits_summary = f"Generated {len(results)} outfit(s):\n"
+            for idx, result in enumerate(results, 1):
+                outfits_summary += f"\nOutfit {idx}: {result['reasoning']}\n"
+                outfits_summary += f"How to wear: {result.get('wearing_instructions', 'N/A')}\n"
+
+            session.add_message("assistant", outfits_summary)
 
             emit_progress(
                 socket_sid,
@@ -656,40 +694,74 @@ def health():
 @app.route('/api/location-weather', methods=['GET'])
 def get_location_weather():
     """
-    Get user's location and weather from IP address
+    Get user's location and weather from GPS coordinates or IP address
+
+    Query params:
+        lat: GPS latitude (optional)
+        lon: GPS longitude (optional)
 
     Returns:
         JSON with location, weather, and suggested background prompt
     """
     try:
-        # Get client IP (handle proxies)
-        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-        if ',' in client_ip:
-            client_ip = client_ip.split(',')[0].strip()
+        # Check if GPS coordinates were provided
+        lat = request.args.get('lat', type=float)
+        lon = request.args.get('lon', type=float)
 
-        # For localhost/private IPs, use a default location
-        if client_ip in ['127.0.0.1', 'localhost'] or client_ip.startswith('192.168.') or client_ip.startswith('10.'):
-            return jsonify({
-                'location': 'New York',
-                'country': 'United States',
-                'weather': 'sunny',
-                'temperature': 72,
-                'description': 'Clear sky',
-                'is_fallback': True
-            })
+        if lat is not None and lon is not None:
+            # Use GPS coordinates directly
+            print(f"Using GPS coordinates: {lat}, {lon}")
+            import requests
 
-        # Use ipapi.co for geolocation (free, no API key needed)
-        import requests
+            # Get location name from reverse geocoding (using open-meteo's API)
+            try:
+                geo_response = requests.get(
+                    f'https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json',
+                    headers={'User-Agent': 'FashionAI/1.0'},
+                    timeout=3
+                )
+                if geo_response.ok:
+                    geo_data = geo_response.json()
+                    address = geo_data.get('address', {})
+                    city = address.get('city') or address.get('town') or address.get('village') or address.get('county', 'Unknown')
+                    country = address.get('country', 'Unknown')
+                else:
+                    city = 'Your Location'
+                    country = 'Unknown'
+            except:
+                city = 'Your Location'
+                country = 'Unknown'
+        else:
+            # Fallback to IP-based location
+            # Get client IP (handle proxies)
+            client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+            if ',' in client_ip:
+                client_ip = client_ip.split(',')[0].strip()
 
-        geo_response = requests.get(f'https://ipapi.co/{client_ip}/json/', timeout=3)
-        geo_data = geo_response.json()
+            # For localhost/private IPs, use a default location
+            if client_ip in ['127.0.0.1', 'localhost'] or client_ip.startswith('192.168.') or client_ip.startswith('10.'):
+                return jsonify({
+                    'location': 'New York',
+                    'country': 'United States',
+                    'weather': 'sunny',
+                    'temperature': 72,
+                    'description': 'Clear sky',
+                    'is_fallback': True
+                })
 
-        city = geo_data.get('city', 'New York')
-        country = geo_data.get('country_name', 'United States')
-        lat = geo_data.get('latitude')
-        lon = geo_data.get('longitude')
+            # Use ipapi.co for geolocation (free, no API key needed)
+            import requests
+
+            geo_response = requests.get(f'https://ipapi.co/{client_ip}/json/', timeout=3)
+            geo_data = geo_response.json()
+
+            city = geo_data.get('city', 'New York')
+            country = geo_data.get('country_name', 'Unknown')
+            lat = geo_data.get('latitude')
+            lon = geo_data.get('longitude')
 
         # Get weather from open-meteo.com (free, no API key needed)
+        # This works for both GPS and IP-based coordinates
         weather_response = requests.get(
             f'https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code&temperature_unit=fahrenheit',
             timeout=3

@@ -63,11 +63,12 @@ PERSON TO DRESS:
 
 IMPORTANT STYLING INSTRUCTIONS:
 - You are creating outfits specifically for this person
-- The person description includes what they're CURRENTLY WEARING in their photo
-- You can MIX AND MATCH: Keep some items from their current outfit and swap in items from the wardrobe
+- The person descriptions show what they're WEARING in each selfie photo
+- You can MIX AND MATCH: Keep items from any of their selfie outfits and swap in items from the wardrobe
 - You can also create entirely new outfits using only wardrobe items
 - Consider their body type, coloring, and style when selecting items that will flatter them
-- When keeping items from their current outfit, reference them clearly (e.g., "their current white sneakers")
+- When keeping items from their selfie outfits, reference them clearly using the format: selfie_1_[item], selfie_2_[item], selfie_3_[item]
+- Example: "selfie_1_white_sneakers" or "selfie_2_denim_jacket"
 """
 
     # Add additional instructions if provided
@@ -79,11 +80,11 @@ IMPORTANT STYLING INSTRUCTIONS:
 
 {items_text}{person_context}{extra_instructions}
 
-Based on your expertise as a fashion stylist, please create 1-3 DIFFERENT outfit combinations.
+Based on your expertise as a fashion stylist, please create 1-6 DIFFERENT outfit combinations.
 
 REQUIREMENTS:
 - Create AT LEAST 1 outfit (always required)
-- Create UP TO 3 outfits total if there are enough suitable items
+- Create UP TO 6 outfits total if there are enough suitable items
 - Each outfit should have 3-5 items
 - You can use ONLY wardrobe items, OR mix wardrobe items with what they're currently wearing
 - Outfits should be distinct from each other (different styles, occasions, or color schemes)
@@ -96,28 +97,58 @@ OUTFIT 1:
 [item numbers and/or current outfit items separated by commas]
 [brief 1-2 sentence style explanation]
 WEAR: [specific wearing instructions - e.g., "jacket open, shirt tucked in, hat backwards"]
+ADVICE: [weather-appropriate styling tip - e.g., "It's chilly today, consider adding leg warmers or tights under the skirt for warmth"]
 
 OUTFIT 2:
 [item numbers and/or current outfit items separated by commas]
 [brief 1-2 sentence style explanation]
 WEAR: [specific wearing instructions]
+ADVICE: [weather-appropriate styling tip]
 
 OUTFIT 3:
 [item numbers and/or current outfit items separated by commas]
 [brief 1-2 sentence style explanation]
 WEAR: [specific wearing instructions]
+ADVICE: [weather-appropriate styling tip]
 
-CORRECT Example (mixing current outfit with wardrobe):
+OUTFIT 4:
+[item numbers and/or current outfit items separated by commas]
+[brief 1-2 sentence style explanation]
+WEAR: [specific wearing instructions]
+ADVICE: [weather-appropriate styling tip]
+
+OUTFIT 5:
+[item numbers and/or current outfit items separated by commas]
+[brief 1-2 sentence style explanation]
+WEAR: [specific wearing instructions]
+ADVICE: [weather-appropriate styling tip]
+
+OUTFIT 6:
+[item numbers and/or current outfit items separated by commas]
+[brief 1-2 sentence style explanation]
+WEAR: [specific wearing instructions]
+ADVICE: [weather-appropriate styling tip]
+
+CORRECT Example (mixing selfie items with wardrobe):
 OUTFIT 1:
-2,4,current_sneakers
-A casual look mixing the wardrobe jeans and tee with their existing white sneakers.
+2,4,selfie_1_white_sneakers
+A casual look mixing the wardrobe jeans and tee with the white sneakers from Photo 1.
 WEAR: Shirt untucked, sleeves rolled up, sneakers laced loosely
+ADVICE: Perfect for mild weather, but bring a light jacket if temps drop below 65°F
 
 CORRECT Example (wardrobe only):
 OUTFIT 1:
 1,3,7
 A bold streetwear ensemble with coordinating colors.
 WEAR: Jacket zipped halfway, hat facing forward, high-top sneakers tied
+ADVICE: This layered look works great in cooler weather, unzip the jacket if it warms up
+
+CORRECT Example (mixing multiple selfie items):
+OUTFIT 1:
+5,selfie_2_denim_jacket,selfie_1_black_jeans
+Combining the wardrobe graphic tee with the denim jacket from Photo 2 and black jeans from Photo 1.
+WEAR: Jacket sleeves rolled to elbows, jeans cuffed once, casual fit
+ADVICE: Layer-friendly outfit - remove the jacket if you get warm indoors
 
 WEARING INSTRUCTIONS MUST INCLUDE:
 - How tops should be worn (buttoned/unbuttoned, tucked/untucked, collar position, etc.)
@@ -131,7 +162,7 @@ INCORRECT Examples:
 - DO NOT skip the WEAR: line
 - DO NOT write vague wear instructions like "wear normally"
 
-Remember: Create 1-3 distinct outfits with DETAILED wearing instructions. Always label them as OUTFIT 1:, OUTFIT 2:, etc."""
+Remember: Create 1-6 distinct outfits with DETAILED wearing instructions. Always label them as OUTFIT 1:, OUTFIT 2:, etc."""
 
     print("\nConsulting fashion agent for outfit selection...")
 
@@ -249,25 +280,30 @@ def parse_multiple_outfits(response_text, clothing_descriptions):
             if item['index'] in selected_indices
         ]
 
-        # Extract reasoning and wearing instructions
+        # Extract reasoning, wearing instructions, and fashion advice
         reasoning = ""
         wearing_instructions = ""
+        fashion_advice = ""
 
         for line in lines[1:]:
             if line.startswith("WEAR:"):
                 wearing_instructions = line.replace("WEAR:", "").strip()
-            elif not wearing_instructions:  # Only add to reasoning if we haven't hit WEAR: yet
+            elif line.startswith("ADVICE:"):
+                fashion_advice = line.replace("ADVICE:", "").strip()
+            elif not wearing_instructions and not fashion_advice:  # Only add to reasoning if we haven't hit WEAR: or ADVICE: yet
                 reasoning += line + " "
 
         reasoning = reasoning.strip() if reasoning else "No explanation provided"
         wearing_instructions = wearing_instructions if wearing_instructions else "Wear as styled in image"
+        fashion_advice = fashion_advice if fashion_advice else None
 
         outfits.append({
             "outfit_number": outfit_number,
             "selected_indices": selected_indices,
             "selected_paths": selected_paths,
             "reasoning": reasoning,
-            "wearing_instructions": wearing_instructions
+            "wearing_instructions": wearing_instructions,
+            "fashion_advice": fashion_advice
         })
 
     return outfits
