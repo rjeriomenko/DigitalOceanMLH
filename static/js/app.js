@@ -132,57 +132,83 @@ function updateFileLabel(input, text) {
 async function displaySelfiePreview(file) {
     selfiePreview.innerHTML = '';
 
+    // Show loading placeholder immediately
+    const placeholderDiv = document.createElement('div');
+    placeholderDiv.className = 'preview-item preview-loading';
+    placeholderDiv.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <span style="font-size:2rem;">📷</span>
+            <span style="font-size:0.7rem;color:white;margin-top:5px;">Converting...</span>
+        </div>
+        <button class="remove-btn" onclick="removeSelfie()">×</button>
+    `;
+    selfiePreview.appendChild(placeholderDiv);
+
     try {
         const imageUrl = await getImagePreviewUrl(file);
+        // Replace placeholder with actual image
         const div = document.createElement('div');
         div.className = 'preview-item';
         div.innerHTML = `
             <img src="${imageUrl}" alt="Selfie preview">
             <button class="remove-btn" onclick="removeSelfie()">×</button>
         `;
+        selfiePreview.innerHTML = '';
         selfiePreview.appendChild(div);
     } catch (error) {
         console.error('Error displaying selfie preview:', error);
-        // Show a placeholder
-        const div = document.createElement('div');
-        div.className = 'preview-item';
-        div.innerHTML = `
-            <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#f0f0f0;">
-                <span>📷</span>
+        // Show error placeholder
+        placeholderDiv.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#ffebee;">
+                <span style="font-size:1.5rem;">⚠️</span>
             </div>
             <button class="remove-btn" onclick="removeSelfie()">×</button>
         `;
-        selfiePreview.appendChild(div);
     }
 }
 
 async function displayClothingPreviews(files) {
     clothingPreview.innerHTML = '';
 
+    // Create all placeholders first for instant feedback
+    const placeholders = [];
+    for (let index = 0; index < files.length; index++) {
+        const placeholderDiv = document.createElement('div');
+        placeholderDiv.className = 'preview-item preview-loading';
+        placeholderDiv.setAttribute('data-index', index);
+        placeholderDiv.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <span style="font-size:2rem;">👕</span>
+                <span style="font-size:0.7rem;color:white;margin-top:5px;">Converting...</span>
+            </div>
+            <button class="remove-btn" onclick="removeClothing(${index})">×</button>
+        `;
+        clothingPreview.appendChild(placeholderDiv);
+        placeholders.push(placeholderDiv);
+    }
+
+    // Convert images asynchronously
     for (let index = 0; index < files.length; index++) {
         const file = files[index];
+        const placeholderDiv = placeholders[index];
 
         try {
             const imageUrl = await getImagePreviewUrl(file);
-            const div = document.createElement('div');
-            div.className = 'preview-item';
-            div.innerHTML = `
+            // Replace placeholder with actual image
+            placeholderDiv.className = 'preview-item';
+            placeholderDiv.innerHTML = `
                 <img src="${imageUrl}" alt="Clothing ${index + 1}">
                 <button class="remove-btn" onclick="removeClothing(${index})">×</button>
             `;
-            clothingPreview.appendChild(div);
         } catch (error) {
             console.error(`Error displaying preview for file ${index}:`, error);
-            // Show a placeholder
-            const div = document.createElement('div');
-            div.className = 'preview-item';
-            div.innerHTML = `
-                <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#f0f0f0;">
-                    <span>👕</span>
+            // Show error placeholder
+            placeholderDiv.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#ffebee;">
+                    <span style="font-size:1.5rem;">⚠️</span>
                 </div>
                 <button class="remove-btn" onclick="removeClothing(${index})">×</button>
             `;
-            clothingPreview.appendChild(div);
         }
     }
 }
@@ -233,13 +259,30 @@ function clearSelfie() {
 }
 
 function removeClothing(index) {
+    // Remove from array
     clothingFiles.splice(index, 1);
-    displayClothingPreviews(clothingFiles);
 
+    // Remove only the specific preview item
+    const previewItems = clothingPreview.querySelectorAll('.preview-item');
+    if (previewItems[index]) {
+        previewItems[index].remove();
+    }
+
+    // Update indices on remaining remove buttons
+    const remainingItems = clothingPreview.querySelectorAll('.preview-item');
+    remainingItems.forEach((item, newIndex) => {
+        const removeBtn = item.querySelector('.remove-btn');
+        if (removeBtn) {
+            removeBtn.setAttribute('onclick', `removeClothing(${newIndex})`);
+        }
+    });
+
+    // Update file input
     const dt = new DataTransfer();
     clothingFiles.forEach(file => dt.items.add(file));
     clothingInput.files = dt.files;
 
+    // Update label and clear button
     if (clothingFiles.length === 0) {
         updateFileLabel(clothingInput, 'Choose clothing images...');
         document.getElementById('clear-clothing-btn').style.display = 'none';
@@ -320,9 +363,12 @@ function displayLiveOutfit(data) {
 
 // ===== Generate Outfits =====
 generateBtn.addEventListener('click', async () => {
-    // Validation
-    if (clothingFiles.length === 0) {
-        showError('Please upload at least one clothing item image');
+    // Get query text
+    const query = queryInput.value.trim();
+
+    // Validation - allow either images OR text query
+    if (clothingFiles.length === 0 && !query) {
+        showError('Please upload clothing images or ask a question');
         return;
     }
 
@@ -425,6 +471,12 @@ function addChatMessage(role, content) {
     // Show chat history
     chatHistory.style.display = 'block';
 
+    // Remove placeholder if it exists
+    const placeholder = chatMessages.querySelector('.chat-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+
     const messageDiv = document.createElement('div');
     messageDiv.className = 'chat-message';
 
@@ -506,6 +558,14 @@ function escapeHtml(text) {
 function createOutfitCard(outfit) {
     const card = document.createElement('div');
     card.className = 'outfit-card';
+    card.setAttribute('data-outfit-number', outfit.outfit_number);
+
+    // Add click handler for 3D magnification
+    card.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('remove-btn')) {
+            magnifyCard(card);
+        }
+    });
 
     const header = document.createElement('div');
     header.className = 'outfit-header';
@@ -550,6 +610,74 @@ function showError(message) {
 function hideError() {
     errorSection.style.display = 'none';
     errorMessage.textContent = '';
+}
+
+// ===== 3D Card Magnification =====
+function magnifyCard(card) {
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'outfit-card-overlay';
+
+    // Clone the card
+    const magnifiedCard = card.cloneNode(true);
+    magnifiedCard.classList.add('outfit-card-magnified');
+    magnifiedCard.classList.remove('outfit-card');
+
+    // Add to body
+    document.body.appendChild(overlay);
+    document.body.appendChild(magnifiedCard);
+
+    // 3D mouse tracking
+    let mouseX = 0;
+    let mouseY = 0;
+
+    function handleMouseMove(e) {
+        const rect = magnifiedCard.getBoundingClientRect();
+        const cardCenterX = rect.left + rect.width / 2;
+        const cardCenterY = rect.top + rect.height / 2;
+
+        // Calculate rotation based on mouse position
+        mouseX = (e.clientX - cardCenterX) / (rect.width / 2);
+        mouseY = (e.clientY - cardCenterY) / (rect.height / 2);
+
+        // Apply 3D rotation (max 15 degrees)
+        const rotateY = mouseX * 15;
+        const rotateX = -mouseY * 15;
+
+        magnifiedCard.style.transform = `
+            translate(-50%, -50%)
+            scale(1.5)
+            rotateY(${rotateY}deg)
+            rotateX(${rotateX}deg)
+        `;
+    }
+
+    // Close on overlay click or Escape key
+    function closeCard() {
+        overlay.remove();
+        magnifiedCard.remove();
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('keydown', handleEscape);
+    }
+
+    function handleEscape(e) {
+        if (e.key === 'Escape') {
+            closeCard();
+        }
+    }
+
+    overlay.addEventListener('click', closeCard);
+    magnifiedCard.addEventListener('click', closeCard);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('keydown', handleEscape);
+
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+
+    // Restore scroll when closed
+    overlay.addEventListener('click', () => {
+        document.body.style.overflow = 'auto';
+    });
 }
 
 // ===== Make Functions Global =====

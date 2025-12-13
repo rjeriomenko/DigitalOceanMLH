@@ -93,22 +93,20 @@ def generate_outfits():
     try:
         emit_progress(socket_sid, "starting", "Starting outfit generation...", 0)
 
-        # Check if images were provided
-        if 'clothing_images' not in request.files:
-            emit_progress(socket_sid, "error", "No clothing images provided", 0)
-            return jsonify({'error': 'No clothing images provided'}), 400
-
-        clothing_files = request.files.getlist('clothing_images')
-        if not clothing_files or len(clothing_files) == 0:
-            emit_progress(socket_sid, "error", "No clothing images provided", 0)
-            return jsonify({'error': 'No clothing images provided'}), 400
-
-        # Get optional selfie
-        selfie_file = request.files.get('selfie')
-
         # Get optional query and session ID
         query = request.form.get('query', '').strip()
         session_id = request.form.get('session_id', '').strip()
+
+        # Check if images or query were provided
+        clothing_files = request.files.getlist('clothing_images') if 'clothing_images' in request.files else []
+
+        # Allow text-only queries for conversation
+        if not clothing_files and not query:
+            emit_progress(socket_sid, "error", "Please provide clothing images or a question", 0)
+            return jsonify({'error': 'Please provide clothing images or a question'}), 400
+
+        # Get optional selfie
+        selfie_file = request.files.get('selfie')
 
         # Get or create session
         session, is_new_session = session_manager.get_or_create_session(session_id if session_id else None)
@@ -126,6 +124,35 @@ def generate_outfits():
         temp_dir = tempfile.mkdtemp(dir=app.config['UPLOAD_FOLDER'])
 
         try:
+            # Handle text-only queries (no images)
+            if not clothing_files and query:
+                emit_progress(socket_sid, "consulting_agent", "Processing your question...", 50)
+
+                # Add query to session history
+                session.add_message("user", query)
+
+                # Get text-only response from query handler
+                query_result = handle_query(query, [], None)
+
+                query_response = None
+                if query_result['type'] == 'question':
+                    query_response = query_result['answer']
+                    session.add_message("assistant", query_response)
+
+                emit_progress(socket_sid, "complete", "Response ready", 100)
+
+                # Build response without outfits
+                response_data = {
+                    'success': True,
+                    'session_id': session_id,
+                    'is_new_session': is_new_session,
+                    'conversation_context': session.get_context_summary(),
+                    'query_response': query_response,
+                    'outfits': []
+                }
+
+                return jsonify(response_data)
+
             # Save and validate clothing images
             clothing_images = []
             for idx, file in enumerate(clothing_files):

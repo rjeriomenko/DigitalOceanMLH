@@ -158,26 +158,36 @@ Remember: Create 1-3 distinct outfits with DETAILED wearing instructions. Always
         outfits = parse_multiple_outfits(response_text, clothing_descriptions)
 
         if not outfits:
-            # Fallback: if parsing fails, create one outfit with all items
-            print("Warning: Could not parse agent response. Creating single outfit with all items.")
+            # Fallback: if parsing fails, let NanoBanana intelligently select items
+            print("Warning: Could not parse agent response. Letting NanoBanana select items intelligently.")
+
+            # Pass all items to NanoBanana with instructions to select a few
+            wearing_instructions = None
+            if additional_instructions:
+                wearing_instructions = f"Follow user instructions: {additional_instructions}. Select appropriate items from the wardrobe to fulfill this."
+            else:
+                wearing_instructions = "Select a few complementary items from the provided wardrobe to create one cohesive, stylish outfit"
+
             outfits = [{
                 "outfit_number": 1,
                 "selected_indices": [item['index'] for item in clothing_descriptions],
                 "selected_paths": [item['path'] for item in clothing_descriptions],
-                "reasoning": "Using all available items (parsing failed)"
+                "reasoning": "AI agent parsing failed - NanoBanana will intelligently select items from wardrobe",
+                "wearing_instructions": wearing_instructions
             }]
 
         return outfits
 
     except Exception as e:
         print(f"Error calling agent: {e}")
-        # Fallback: use all items if agent fails
-        print("Falling back to using all clothing items in single outfit...")
+        # Fallback: let NanoBanana select items
+        print("Agent failed. Letting NanoBanana select items intelligently...")
         return [{
             "outfit_number": 1,
             "selected_indices": [item['index'] for item in clothing_descriptions],
             "selected_paths": [item['path'] for item in clothing_descriptions],
-            "reasoning": f"Agent error: {str(e)}. Using all items."
+            "reasoning": f"Agent error - NanoBanana will select items from wardrobe",
+            "wearing_instructions": "Select a few complementary items from the provided wardrobe to create one cohesive, stylish outfit"
         }]
 
 

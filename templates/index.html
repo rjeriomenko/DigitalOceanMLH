@@ -24,9 +24,28 @@
         <!-- Main Content -->
         <main class="main-content">
             <!-- Chat History Section (scrollable) -->
-            <section id="chat-history" class="chat-history" style="display: none;">
+            <section id="chat-history" class="chat-history">
                 <h2 class="chat-title">💬 Conversation History</h2>
-                <div id="chat-messages" class="chat-messages"></div>
+                <div id="chat-messages" class="chat-messages">
+                    <div class="chat-message chat-placeholder">
+                        <div class="chat-message-assistant">
+                            <div class="message-label">Fashion AI</div>
+                            <div class="placeholder-content">
+                                <div class="placeholder-icon">👋</div>
+                                <h3>Welcome to Fashion AI!</h3>
+                                <p>Upload clothing images to get started, or ask me a fashion question.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress Section (inside chat) -->
+                <section id="progress-section" class="progress-section" style="display: none;">
+                    <div class="progress-bar-container" id="progress-bar">
+                        <div class="progress-bar-fill" id="progress-fill"></div>
+                    </div>
+                    <p class="progress-text" id="progress-text">Starting...</p>
+                </section>
             </section>
 
             <!-- Upload Section -->
@@ -74,14 +93,6 @@
                     <span class="btn-text">✨ Generate Outfits</span>
                     <span class="spinner" style="display: none;">⏳</span>
                 </button>
-            </section>
-
-            <!-- Progress Section -->
-            <section id="progress-section" class="progress-section" style="display: none;">
-                <div class="progress-bar-container" id="progress-bar">
-                    <div class="progress-bar-fill" id="progress-fill"></div>
-                </div>
-                <p class="progress-text" id="progress-text">Starting...</p>
             </section>
 
             <!-- Error Section -->
