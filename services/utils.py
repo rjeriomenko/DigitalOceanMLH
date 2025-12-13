@@ -77,13 +77,13 @@ def validate_image_path(image_path):
     return True
 
 
-def validate_image_paths(image_paths, max_count=10):
+def validate_image_paths(image_paths, max_count=20):
     """
     Validates a list of image paths.
 
     Args:
         image_paths: List of image paths to validate
-        max_count: Maximum number of images allowed (default: 10)
+        max_count: Maximum number of images allowed (default: 20)
 
     Returns:
         bool: True if all paths are valid

@@ -53,19 +53,24 @@ def select_outfit(clothing_descriptions, agent_access_key=None, agent_endpoint=N
 
 {items_text}
 
-Based on your expertise as a fashion stylist, please select 3-5 items that create a cohesive, stylish outfit. Apply your knowledge of:
-- Color coordination and color theory
-- Style compatibility and aesthetic harmony
-- Appropriate layering and garment combinations
-- Overall visual appeal and fashion principles
+Based on your expertise as a fashion stylist, please select 3-5 items that create a cohesive, stylish outfit.
 
-Respond using this exact format:
-Line 1: Selected item numbers only, separated by commas (example: 1,3,5)
-Line 2: Brief 1-2 sentence explanation of your styling rationale
+CRITICAL INSTRUCTION - Response Format:
+Your response must have EXACTLY this format:
 
-Example response:
+First line: ONLY the item numbers separated by commas. Nothing else on this line.
+Second line: Your brief explanation (1-2 sentences).
+
+CORRECT Example:
 2,4,5
-These items create a classic casual look with complementary earth tones and balanced proportions."""
+These items create a classic casual look with complementary earth tones and balanced proportions.
+
+INCORRECT Examples:
+- DO NOT write: "I think items 2, 4, and 5 would work well..." (too many words on first line)
+- DO NOT write: "Based on the colors, I select: 2,4,5" (explanation before numbers)
+- DO NOT include thinking process in your response
+
+Remember: First line = numbers and commas ONLY. Second line = explanation."""
 
     print("\nConsulting fashion agent for outfit selection...")
 
@@ -123,6 +128,9 @@ def parse_agent_response(response_text):
     """
     Parse the agent's response to extract selected item numbers.
 
+    The agent should respond with numbers on the first line (e.g., "1,3,5").
+    This parser ignores any "thinking" or explanation that comes after.
+
     Handles various formats:
     - "1,3,5"
     - "Items: 1, 3, 5"
@@ -135,19 +143,54 @@ def parse_agent_response(response_text):
     Returns:
         list[int]: List of selected item indices
     """
-    # Try to find numbers in the first line
+    # Remove <think> blocks if present (some models use this for reasoning)
+    import re
+    response_text = re.sub(r'<think>.*?</think>', '', response_text, flags=re.DOTALL)
+
+    # Split response into lines and process
     lines = response_text.strip().split('\n')
-    first_line = lines[0].strip()
 
-    # Extract all numbers from the first line
-    numbers = re.findall(r'\d+', first_line)
+    # Look for the first non-empty line that contains numbers
+    for line in lines:
+        line = line.strip()
 
-    if numbers:
-        return [int(n) for n in numbers]
+        # Skip empty lines
+        if not line:
+            continue
 
-    # Fallback: try to find numbers anywhere in the response
-    all_numbers = re.findall(r'\d+', response_text)
-    if all_numbers:
-        return [int(n) for n in all_numbers]
+        # Skip lines that look like thinking/explanation (contain lots of words)
+        # We want lines that are primarily numbers and commas
+        word_count = len(re.findall(r'[a-zA-Z]+', line))
+
+        # If this line has 3 or fewer words, it's likely the selection line
+        if word_count <= 3:
+            # Extract numbers from this line
+            numbers = re.findall(r'\d+', line)
+            if numbers:
+                # Convert to integers and remove duplicates while preserving order
+                seen = set()
+                unique_numbers = []
+                for n in numbers:
+                    num = int(n)
+                    if num not in seen:
+                        seen.add(num)
+                        unique_numbers.append(num)
+                return unique_numbers
+
+    # Fallback: Look for a line that's just numbers and commas/spaces
+    for line in lines:
+        line = line.strip()
+        # Check if line is mostly numbers, commas, and spaces
+        if re.match(r'^[\d,\s]+$', line):
+            numbers = re.findall(r'\d+', line)
+            if numbers:
+                return list(dict.fromkeys([int(n) for n in numbers]))  # Remove duplicates, preserve order
+
+    # Last resort: take numbers from first line only
+    if lines:
+        first_line = lines[0].strip()
+        numbers = re.findall(r'\d+', first_line)
+        if numbers:
+            return list(dict.fromkeys([int(n) for n in numbers]))
 
     return []

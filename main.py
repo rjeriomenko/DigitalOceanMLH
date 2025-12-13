@@ -46,11 +46,11 @@ def print_banner():
 def print_usage():
     """Print usage instructions"""
     print("\nUsage:")
-    print("  python main.py <image1.jpg> <image2.jpg> ... [up to 10 images]")
+    print("  python main.py <image1.jpg> <image2.jpg> ... [up to 20 images]")
     print("\nExample:")
     print("  python main.py clothing/shirt.jpg clothing/pants.jpg clothing/jacket.jpg")
     print("\nRequirements:")
-    print("  - 1-10 clothing item images")
+    print("  - 1-20 clothing item images")
     print("  - Valid image formats: jpg, jpeg, png, gif, bmp, webp")
     print("  - API keys set in .env file:")
     print("    • GOOGLE_API_KEY")
@@ -117,7 +117,7 @@ def main():
 
         # Step 1: Validate images
         print("\n📋 Step 1: Validating images...")
-        validate_image_paths(image_paths, max_count=10)
+        validate_image_paths(image_paths, max_count=20)
         print(f"   ✓ All {len(image_paths)} images are valid")
 
         # Step 2: Generate semantic descriptions

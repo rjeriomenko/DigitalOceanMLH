@@ -6,6 +6,7 @@ Converts images to semantic text descriptions for the DigitalOcean agent.
 """
 
 import os
+import time
 from google import genai
 from google.genai import types
 from .utils import read_local_image
@@ -65,7 +66,7 @@ Keep it under 20 words."""
 
     # Generate description
     response = client.models.generate_content(
-        model="gemini-2.0-flash-exp",  # Using flash model for faster descriptions
+        model="gemini-2.5-flash-image",  # Higher quota limits for image understanding
         contents=contents,
         config=generate_content_config,
     )
@@ -74,13 +75,14 @@ Keep it under 20 words."""
     return description
 
 
-def describe_clothing_items(image_paths, api_key=None):
+def describe_clothing_items(image_paths, api_key=None, rate_limit_delay=0.2):
     """
     Generate descriptions for multiple clothing items.
 
     Args:
         image_paths: List of paths to clothing images
         api_key: Google API key (optional)
+        rate_limit_delay: Seconds to wait between API calls (default: 0.2)
 
     Returns:
         list[dict]: List of dicts with 'index', 'path', and 'description' for each item
@@ -105,14 +107,44 @@ def describe_clothing_items(image_paths, api_key=None):
             })
             print(f"  → {description}")
 
+            # Rate limiting: wait between API calls to avoid hitting rate limits
+            if idx < len(image_paths):  # Don't wait after the last item
+                time.sleep(rate_limit_delay)
+
         except Exception as e:
             print(f"  ✗ Error describing image: {e}")
-            # Use filename as fallback description
-            fallback_desc = f"clothing item from {os.path.basename(image_path)}"
-            descriptions.append({
-                "index": idx,
-                "path": image_path,
-                "description": fallback_desc
-            })
+
+            # Check if it's a rate limit error
+            error_str = str(e).lower()
+            if "rate" in error_str or "quota" in error_str or "429" in error_str:
+                print(f"  ⏳ Rate limit detected. Waiting 5 seconds before retry...")
+                time.sleep(5)
+
+                # Retry once
+                try:
+                    description = describe_clothing_item(image_path, api_key)
+                    descriptions.append({
+                        "index": idx,
+                        "path": image_path,
+                        "description": description
+                    })
+                    print(f"  → {description} (retry successful)")
+                    time.sleep(rate_limit_delay)
+                except Exception as retry_e:
+                    print(f"  ✗ Retry failed: {retry_e}")
+                    fallback_desc = f"clothing item from {os.path.basename(image_path)}"
+                    descriptions.append({
+                        "index": idx,
+                        "path": image_path,
+                        "description": fallback_desc
+                    })
+            else:
+                # Use filename as fallback description for non-rate-limit errors
+                fallback_desc = f"clothing item from {os.path.basename(image_path)}"
+                descriptions.append({
+                    "index": idx,
+                    "path": image_path,
+                    "description": fallback_desc
+                })
 
     return descriptions
