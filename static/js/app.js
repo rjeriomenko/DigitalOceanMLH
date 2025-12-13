@@ -65,7 +65,63 @@ function initWebSocket() {
 // Initialize WebSocket on load
 document.addEventListener('DOMContentLoaded', () => {
     initWebSocket();
+    loadLocationWeatherBackground();
 });
+
+// ===== Location, Weather, and Background =====
+async function loadLocationWeatherBackground() {
+    try {
+        // Fetch location and weather
+        const response = await fetch('/api/location-weather');
+        const data = await response.json();
+
+        console.log('Location/Weather:', data);
+
+        // Generate background image
+        const bgResponse = await fetch('/api/generate-background', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                location: data.location,
+                weather: data.weather
+            })
+        });
+
+        const bgData = await bgResponse.json();
+
+        if (bgData.success) {
+            // Apply background with fade-in effect
+            applyBackground(bgData.image_url, data.location, data.weather);
+        }
+    } catch (error) {
+        console.error('Error loading background:', error);
+    }
+}
+
+function applyBackground(imageUrl, location, weather) {
+    // Create background element
+    const bgDiv = document.createElement('div');
+    bgDiv.className = 'dynamic-background';
+    bgDiv.style.backgroundImage = `url(${imageUrl})`;
+    bgDiv.style.opacity = '0';
+
+    // Insert as first child of body
+    document.body.insertBefore(bgDiv, document.body.firstChild);
+
+    // Fade in slowly
+    setTimeout(() => {
+        bgDiv.style.opacity = '1';
+    }, 100);
+
+    // Add location indicator
+    const locationTag = document.createElement('div');
+    locationTag.className = 'location-tag';
+    locationTag.innerHTML = `
+        <span class="location-icon">📍</span>
+        <span class="location-text">${location} • ${weather}</span>
+    `;
+    document.body.appendChild(locationTag);
+}
 
 // ===== Progress Updates =====
 function updateProgress(data) {
@@ -89,6 +145,11 @@ function updateProgress(data) {
     // Store session ID if provided
     if (details && details.session_id) {
         sessionId = details.session_id;
+    }
+
+    // Create placeholder cards when outfit generation starts
+    if (step === 'generating_images' && details && details.total_outfits) {
+        createOutfitPlaceholders(details.total_outfits);
     }
 
     // Handle completion
@@ -271,57 +332,81 @@ function updatePreprocessingProgress(completed, total) {
 async function displayClothingPreviews(files) {
     clothingPreview.innerHTML = '';
 
-    // Create all placeholders first for instant feedback
-    const placeholders = [];
-    const conversionPromises = [];
-
     for (let index = 0; index < files.length; index++) {
-        const placeholderDiv = document.createElement('div');
-        placeholderDiv.className = 'preview-item preview-loading';
-        placeholderDiv.setAttribute('data-index', index);
-        placeholderDiv.setAttribute('data-file-id', `file-${Date.now()}-${index}`);
-        placeholderDiv.innerHTML = `
+        const file = files[index];
+        const previewDiv = document.createElement('div');
+        previewDiv.className = 'preview-item preview-loading';
+        previewDiv.setAttribute('data-index', index);
+        previewDiv.setAttribute('data-filename', file.name);
+
+        // Show placeholder immediately
+        previewDiv.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                 <span style="font-size:2rem;">👕</span>
-                <span style="font-size:0.7rem;color:white;margin-top:5px;">Converting...</span>
+                <span style="font-size:0.7rem;color:white;margin-top:5px;">Loading...</span>
             </div>
             <button class="remove-btn" onclick="removeClothing(${index})">×</button>
         `;
-        clothingPreview.appendChild(placeholderDiv);
-        placeholders.push(placeholderDiv);
+        clothingPreview.appendChild(previewDiv);
 
-        // Start conversion immediately (all in parallel)
-        const conversionPromise = (async (idx, file, placeholder) => {
-            try {
-                const imageUrl = await getImagePreviewUrl(file);
-
-                // Check if placeholder still exists (wasn't removed)
-                if (placeholder.parentNode) {
-                    placeholder.className = 'preview-item';
-                    placeholder.innerHTML = `
-                        <img src="${imageUrl}" alt="Clothing ${idx + 1}">
-                        <button class="remove-btn" onclick="removeClothing(${idx})">×</button>
-                    `;
-                }
-            } catch (error) {
-                console.error(`Error displaying preview for file ${idx}:`, error);
-                // Check if placeholder still exists
-                if (placeholder.parentNode) {
-                    placeholder.innerHTML = `
-                        <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#ffebee;">
-                            <span style="font-size:1.5rem;">⚠️</span>
-                        </div>
-                        <button class="remove-btn" onclick="removeClothing(${idx})">×</button>
-                    `;
-                }
-            }
-        })(index, files[index], placeholderDiv);
-
-        conversionPromises.push(conversionPromise);
+        // Convert HEIC on backend if needed, then load
+        convertAndDisplayImage(file, index, previewDiv);
     }
+}
 
-    // Wait for all conversions to complete
-    await Promise.all(conversionPromises);
+async function convertAndDisplayImage(file, index, previewDiv) {
+    const isHEIC = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+
+    if (isHEIC) {
+        // Send to backend for conversion
+        try {
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('filename', file.name);
+
+            const response = await fetch('/api/convert-heic', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const imageUrl = URL.createObjectURL(blob);
+
+                // Replace placeholder with converted image
+                if (previewDiv.parentNode) {
+                    previewDiv.className = 'preview-item';
+                    previewDiv.innerHTML = `
+                        <img src="${imageUrl}" alt="Clothing ${index + 1}">
+                        <button class="remove-btn" onclick="removeClothing(${index})">×</button>
+                    `;
+                }
+            } else {
+                throw new Error('Conversion failed');
+            }
+        } catch (error) {
+            console.error('HEIC conversion error:', error);
+            // Fallback to FileReader
+            loadImageWithFileReader(file, index, previewDiv);
+        }
+    } else {
+        // Regular images - just use FileReader
+        loadImageWithFileReader(file, index, previewDiv);
+    }
+}
+
+function loadImageWithFileReader(file, index, previewDiv) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        if (previewDiv.parentNode) {
+            previewDiv.className = 'preview-item';
+            previewDiv.innerHTML = `
+                <img src="${e.target.result}" alt="Clothing ${index + 1}">
+                <button class="remove-btn" onclick="removeClothing(${index})">×</button>
+            `;
+        }
+    };
+    reader.readAsDataURL(file);
 }
 
 // Helper function to get preview URL (handles HEIC conversion)
@@ -439,10 +524,22 @@ function displayLiveOutfit(data) {
             let existingCard = outfitsGrid.querySelector(`[data-outfit-number="${outfit_number}"]`);
 
             if (existingCard) {
-                // Update existing card with the image
-                const img = existingCard.querySelector('.outfit-image');
-                if (img) {
+                // Replace placeholder with actual image
+                const placeholder = existingCard.querySelector('.outfit-image-placeholder');
+                if (placeholder) {
+                    const img = document.createElement('img');
+                    img.className = 'outfit-image';
                     img.src = image_url;
+                    img.alt = `Outfit ${outfit_number}`;
+                    img.loading = 'eager';
+                    placeholder.replaceWith(img);
+                    existingCard.classList.remove('outfit-card-loading');
+                } else {
+                    // Update existing image
+                    const img = existingCard.querySelector('.outfit-image');
+                    if (img) {
+                        img.src = image_url;
+                    }
                 }
             } else {
                 // Create a placeholder card immediately
@@ -626,7 +723,7 @@ function createAssistantPlaceholder(data) {
     // Show chat history
     chatHistory.style.display = 'block';
 
-    // COMPLETELY REMOVE welcome placeholder (not reuse it!)
+    // Remove welcome placeholder if it exists
     const welcomePlaceholder = chatMessages.querySelector('.chat-placeholder');
     if (welcomePlaceholder) {
         welcomePlaceholder.remove();
@@ -916,6 +1013,46 @@ function magnifyCard(card) {
     overlay.addEventListener('click', () => {
         document.body.style.overflow = 'auto';
     });
+}
+
+// ===== Outfit Placeholder Creation =====
+function createOutfitPlaceholders(totalOutfits) {
+    const assistantMessages = chatMessages.querySelectorAll('.chat-message-assistant');
+    const currentMessage = assistantMessages[assistantMessages.length - 1];
+
+    if (currentMessage) {
+        const outfitsGrid = currentMessage.querySelector('.outfits-grid');
+
+        if (outfitsGrid && outfitsGrid.children.length === 0) {
+            // Create placeholder cards for all outfits
+            for (let i = 1; i <= totalOutfits; i++) {
+                const placeholderCard = createPlaceholderOutfitCard(i);
+                outfitsGrid.appendChild(placeholderCard);
+            }
+        }
+    }
+}
+
+function createPlaceholderOutfitCard(outfitNumber) {
+    const card = document.createElement('div');
+    card.className = 'outfit-card outfit-card-loading';
+    card.setAttribute('data-outfit-number', outfitNumber);
+
+    card.innerHTML = `
+        <div class="outfit-header">Outfit ${outfitNumber}</div>
+        <div class="outfit-image-placeholder">
+            <div class="loading-spinner">
+                <div class="spinner-icon">⏳</div>
+                <div class="spinner-text">Generating...</div>
+            </div>
+        </div>
+        <div class="outfit-details">
+            <p class="outfit-reasoning">Preparing outfit details...</p>
+            <p class="outfit-wearing">Instructions will appear once generated</p>
+        </div>
+    `;
+
+    return card;
 }
 
 // ===== Make Functions Global =====

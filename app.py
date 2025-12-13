@@ -344,7 +344,8 @@ def generate_outfits():
                 socket_sid,
                 "generating_images",
                 f"Generating {len(outfits)} outfit image(s) with Gemini NanoBanana...",
-                60
+                60,
+                {"total_outfits": len(outfits)}
             )
 
             # Track completed outfits for progress (handles out-of-order completion)
@@ -444,6 +445,57 @@ def serve_output(filename):
     return send_from_directory(app.config['OUTPUT_FOLDER'], filename)
 
 
+@app.route('/api/convert-heic', methods=['POST'])
+def convert_heic():
+    """
+    Convert HEIC image to JPEG and return the converted image
+
+    Accepts:
+        - image: HEIC image file
+        - filename: Original filename
+
+    Returns:
+        JPEG image blob
+    """
+    try:
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image provided'}), 400
+
+        image_file = request.files['image']
+
+        if not image_file or not image_file.filename:
+            return jsonify({'error': 'Invalid image'}), 400
+
+        # Create temp directory
+        temp_dir = tempfile.mkdtemp(dir=app.config['UPLOAD_FOLDER'])
+
+        try:
+            # Save file
+            safe_name = secure_filename(image_file.filename) if image_file.filename else 'temp.heic'
+            filepath = os.path.join(temp_dir, safe_name)
+            image_file.save(filepath)
+
+            # Validate and convert if needed (this handles HEIC conversion with pillow-heif)
+            processed_path, mime_type = validate_and_prepare_image(filepath)
+
+            # Return the converted image as a blob
+            return send_from_directory(os.path.dirname(processed_path), os.path.basename(processed_path), mimetype='image/jpeg')
+
+        finally:
+            # Clean up temp directory after a delay
+            import threading
+            def cleanup():
+                import time
+                time.sleep(5)  # Wait 5 seconds for response to be sent
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            threading.Thread(target=cleanup).start()
+
+    except Exception as e:
+        print(f"Error converting HEIC: {e}")
+        traceback.print_exc()
+        return jsonify({'error': f'Conversion error: {str(e)}'}), 500
+
+
 @app.route('/api/describe-image', methods=['POST'])
 def describe_image():
     """
@@ -526,6 +578,136 @@ def health():
         'status': 'healthy',
         'active_sessions': session_manager.get_session_count()
     })
+
+
+@app.route('/api/location-weather', methods=['GET'])
+def get_location_weather():
+    """
+    Get user's location and weather from IP address
+
+    Returns:
+        JSON with location, weather, and suggested background prompt
+    """
+    try:
+        # Get client IP (handle proxies)
+        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if ',' in client_ip:
+            client_ip = client_ip.split(',')[0].strip()
+
+        # For localhost/private IPs, use a default location
+        if client_ip in ['127.0.0.1', 'localhost'] or client_ip.startswith('192.168.') or client_ip.startswith('10.'):
+            return jsonify({
+                'location': 'New York',
+                'country': 'United States',
+                'weather': 'sunny',
+                'temperature': 72,
+                'description': 'Clear sky',
+                'is_fallback': True
+            })
+
+        # Use ipapi.co for geolocation (free, no API key needed)
+        import requests
+
+        geo_response = requests.get(f'https://ipapi.co/{client_ip}/json/', timeout=3)
+        geo_data = geo_response.json()
+
+        city = geo_data.get('city', 'New York')
+        country = geo_data.get('country_name', 'United States')
+        lat = geo_data.get('latitude')
+        lon = geo_data.get('longitude')
+
+        # Get weather from open-meteo.com (free, no API key needed)
+        weather_response = requests.get(
+            f'https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code&temperature_unit=fahrenheit',
+            timeout=3
+        )
+        weather_data = weather_response.json()
+
+        # Map weather codes to simple descriptions
+        weather_code = weather_data.get('current', {}).get('weather_code', 0)
+        weather_map = {
+            0: 'sunny', 1: 'partly cloudy', 2: 'cloudy', 3: 'cloudy',
+            45: 'foggy', 48: 'foggy',
+            51: 'rainy', 53: 'rainy', 55: 'rainy', 56: 'rainy', 57: 'rainy',
+            61: 'rainy', 63: 'rainy', 65: 'rainy', 66: 'rainy', 67: 'rainy',
+            71: 'snowy', 73: 'snowy', 75: 'snowy', 77: 'snowy',
+            80: 'rainy', 81: 'rainy', 82: 'rainy',
+            85: 'snowy', 86: 'snowy',
+            95: 'stormy', 96: 'stormy', 99: 'stormy'
+        }
+
+        weather = weather_map.get(weather_code, 'sunny')
+        temperature = weather_data.get('current', {}).get('temperature_2m', 72)
+
+        return jsonify({
+            'location': city,
+            'country': country,
+            'weather': weather,
+            'temperature': int(temperature),
+            'description': weather.capitalize(),
+            'is_fallback': False
+        })
+
+    except Exception as e:
+        print(f"Error getting location/weather: {e}")
+        # Fallback to New York on sunny day
+        return jsonify({
+            'location': 'New York',
+            'country': 'United States',
+            'weather': 'sunny',
+            'temperature': 72,
+            'description': 'Clear sky',
+            'is_fallback': True
+        })
+
+
+@app.route('/api/generate-background', methods=['POST'])
+def generate_background():
+    """
+    Generate a background image using Gemini NanoBanana
+
+    Accepts:
+        - location: City name
+        - weather: Weather condition (sunny/cloudy/rainy/snowy)
+
+    Returns:
+        JSON with background image path
+    """
+    try:
+        data = request.get_json()
+        location = data.get('location', 'New York')
+        weather = data.get('weather', 'sunny')
+
+        # Import Gemini generator
+        from services.gemini_generator import generate_outfit_image_simple
+
+        # Create a descriptive prompt for the background
+        prompt = f"A beautiful, atmospheric photograph of {location} on a {weather} day. Professional travel photography style, vibrant colors, high quality, wide angle cityscape or landmark view. {weather} weather clearly visible. Photorealistic, 8K quality."
+
+        # Generate the image
+        output_dir = app.config['OUTPUT_FOLDER']
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Generate background image (use simple version, no outfit needed)
+        generated_image_path = generate_outfit_image_simple(
+            image_paths=[],
+            prompt=prompt,
+            output_dir=output_dir
+        )
+
+        if generated_image_path:
+            image_filename = os.path.basename(generated_image_path)
+            return jsonify({
+                'success': True,
+                'image_url': f'/output/{image_filename}'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to generate background image'}), 500
+
+    except Exception as e:
+        print(f"Error generating background: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # WebSocket event handlers
