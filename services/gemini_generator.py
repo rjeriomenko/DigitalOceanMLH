@@ -75,7 +75,7 @@ def generate_outfit_image(selected_image_paths, output_dir="output", selfie_path
     # Build wearing instructions text
     wear_text = ""
     if wearing_instructions:
-        wear_text = f"\n\nSTYLING PREFERENCES:\n{wearing_instructions}\n\nIMPORTANT: These are styling preferences for HOW to wear the items. You must ONLY use items shown in the clothing images above. Do not add any items mentioned in styling preferences that are not shown in the images. If a preference mentions an item not in the images, ignore that part of the preference."
+        wear_text = f"\n\nSTYLING PREFERENCES (MANDATORY):\n{wearing_instructions}\n\nYou MUST follow these styling instructions, especially button/zip commands. If it says 'buttoned' or 'zipped', the garment must be fully closed. If it says 'open' or 'unzipped', show it open. Only use items shown in the clothing images above. Do not add any items mentioned in styling preferences that are not shown in the images."
 
     # Create the prompt based on whether we have a selfie
     if selfie_path:
@@ -91,11 +91,13 @@ CRITICAL REQUIREMENTS - OUTFIT ITEMS:
 - Show EVERY clothing item provided in the images
 - The person may be wearing some clothes in their reference photo - you can keep OR swap them with the wardrobe items shown
 
-LAYERING AND VISIBILITY:
-- You may show underlying layers (e.g., shirt under jacket) to display all items UNLESS the styling preferences specify the outer layer should be buttoned/zipped
-- If styling says "blazer buttoned" or "jacket zipped", then button/zip it even if it hides underlying items
-- If styling says "blazer open" or "jacket unzipped", show it open to reveal underlying items
-- If no buttoning/zipping instruction is given, you may show layers open to display all clothing items
+LAYERING AND VISIBILITY - CRITICAL RULES:
+- Check the styling preferences section carefully for button/zip instructions
+- If styling says "buttoned" or "zipped": You MUST button or zip that garment completely closed, even if it hides the shirt underneath
+- If styling says "open" or "unzipped": You MUST show it open or unzipped to reveal underlying items
+- If styling says "halfway" or "partially": Button/zip only halfway
+- If NO button/zip instruction is given: Default to open/unbuttoned to show all items
+- Following button/zip instructions is MORE IMPORTANT than showing all items
 - Never show underwear or nudity - all clothing must maintain modesty
 
 STYLING AND PHOTOGRAPHY:
@@ -117,11 +119,13 @@ CRITICAL REQUIREMENTS - OUTFIT ITEMS:
 - Show EVERY clothing item provided in the images
 - Do not add any accessories, hats, belts, or other items unless they are shown in the input images
 
-LAYERING AND VISIBILITY:
-- You may show underlying layers (e.g., shirt under jacket) to display all items UNLESS the styling preferences specify the outer layer should be buttoned/zipped
-- If styling says "blazer buttoned" or "jacket zipped", then button/zip it even if it hides underlying items
-- If styling says "blazer open" or "jacket unzipped", show it open to reveal underlying items
-- If no buttoning/zipping instruction is given, you may show layers open to display all clothing items
+LAYERING AND VISIBILITY - CRITICAL RULES:
+- Check the styling preferences section carefully for button/zip instructions
+- If styling says "buttoned" or "zipped": You MUST button or zip that garment completely closed, even if it hides the shirt underneath
+- If styling says "open" or "unzipped": You MUST show it open or unzipped to reveal underlying items
+- If styling says "halfway" or "partially": Button/zip only halfway
+- If NO button/zip instruction is given: Default to open/unbuttoned to show all items
+- Following button/zip instructions is MORE IMPORTANT than showing all items
 - Never show underwear or nudity - all clothing must maintain modesty
 
 STYLING AND PHOTOGRAPHY:
