@@ -56,3 +56,6 @@ htmlcov/
 output/
 NanoBanana_Output_*.jpg
 NanoBanana_Output_*.png
+
+# Uploaded files
+uploads/

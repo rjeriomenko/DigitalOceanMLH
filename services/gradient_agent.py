@@ -10,13 +10,14 @@ import re
 from gradient import Gradient
 
 
-def select_outfit(clothing_descriptions, person_description=None, agent_access_key=None, agent_endpoint=None, model="llama3.3-70b-instruct"):
+def select_outfit(clothing_descriptions, person_description=None, additional_instructions=None, agent_access_key=None, agent_endpoint=None, model="llama3.3-70b-instruct"):
     """
     Use DigitalOcean agent to select multiple outfit combinations from clothing items.
 
     Args:
         clothing_descriptions: List of dicts with 'index', 'path', 'description'
         person_description: Description of the person wearing the outfits (optional)
+        additional_instructions: Extra styling instructions from user query (optional)
         agent_access_key: Agent access key (optional, reads from env)
         agent_endpoint: Agent endpoint URL (optional, reads from env)
         model: Model to use (default: llama3.3-70b-instruct)
@@ -69,9 +70,14 @@ IMPORTANT STYLING INSTRUCTIONS:
 - When keeping items from their current outfit, reference them clearly (e.g., "their current white sneakers")
 """
 
+    # Add additional instructions if provided
+    extra_instructions = ""
+    if additional_instructions:
+        extra_instructions = f"\n\nADDITIONAL STYLING GUIDANCE:\n{additional_instructions}\n\nPlease incorporate this guidance into your outfit selections."
+
     prompt = f"""I have the following clothing items in my wardrobe:
 
-{items_text}{person_context}
+{items_text}{person_context}{extra_instructions}
 
 Based on your expertise as a fashion stylist, please create 1-3 DIFFERENT outfit combinations.
 

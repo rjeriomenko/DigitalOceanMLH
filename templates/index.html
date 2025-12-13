@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fashion AI - Outfit Generator</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="emoji">👔</span>
+                <h1>Fashion AI</h1>
+                <span class="emoji">👗</span>
+            </div>
+            <p class="subtitle">AI-Powered Outfit Generator</p>
+            <p class="powered-by">Powered by DigitalOcean Gradient AI & Google Gemini</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <div class="input-group">
+                    <label for="query" class="label">
+                        <span class="emoji">💬</span> Ask a Question or Add Instructions (Optional)
+                    </label>
+                    <textarea
+                        id="query"
+                        placeholder="e.g., 'What would look good for a casual date?' or 'Make the outfit more formal'"
+                        rows="3"
+                    ></textarea>
+                </div>
+
+                <div class="input-group">
+                    <label for="selfie" class="label">
+                        <span class="emoji">🤳</span> Your Selfie (Optional - for personalized outfits)
+                    </label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="selfie" accept="image/*" class="file-input">
+                        <label for="selfie" class="file-label">
+                            <span class="file-label-text">Choose selfie...</span>
+                        </label>
+                        <div id="selfie-preview" class="preview-container"></div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="clothing" class="label required">
+                        <span class="emoji">👕</span> Clothing Items (1-20 images)
+                    </label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="clothing" accept="image/*" multiple class="file-input" required>
+                        <label for="clothing" class="file-label">
+                            <span class="file-label-text">Choose clothing images...</span>
+                        </label>
+                        <div id="clothing-preview" class="preview-container"></div>
+                    </div>
+                </div>
+
+                <button id="generate-btn" class="btn-primary">
+                    <span class="btn-text">✨ Generate Outfits</span>
+                    <span class="spinner" style="display: none;">⏳</span>
+                </button>
+            </section>
+
+            <!-- Results Section -->
+            <section id="results-section" class="results-section" style="display: none;">
+                <!-- Query Response -->
+                <div id="query-response" class="query-response" style="display: none;">
+                    <h3>💭 Response</h3>
+                    <p id="query-answer"></p>
+                </div>
+
+                <!-- Outfits -->
+                <div id="outfits-container" class="outfits-container"></div>
+            </section>
+
+            <!-- Error Section -->
+            <div id="error-section" class="error-section" style="display: none;">
+                <p id="error-message"></p>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Built with ❤️ for DigitalOcean MLH Hackathon</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
