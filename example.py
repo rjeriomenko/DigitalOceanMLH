@@ -99,6 +99,30 @@ def async_chat_completion():
     asyncio.run(run_async())
 
 
+def agent_chat():
+    """Example of using an agent with custom instructions"""
+    print("=" * 50)
+    print("Agent Chat Example")
+    print("=" * 50)
+
+    # Initialize the Gradient client with agent credentials
+    agent_client = Gradient(
+        agent_access_key=os.environ.get("GRADIENT_AGENT_ACCESS_KEY"),
+        agent_endpoint=os.environ.get("GRADIENT_AGENT_ENDPOINT")
+    )
+
+    # Send a message to the agent
+    response = agent_client.agents.chat.completions.create(
+        messages=[
+            {"role": "user", "content": "hello"}
+        ],
+        model="llama3.3-70b-instruct"
+    )
+
+    print(f"\nAgent Response: {response.choices[0].message.content}")
+    print()
+
+
 def main():
     """Run all examples"""
     # Check if API key is set
@@ -117,6 +141,7 @@ def main():
         basic_chat_completion()
         streaming_chat_completion()
         async_chat_completion()
+        agent_chat()
 
         print("All examples completed successfully!")
 
