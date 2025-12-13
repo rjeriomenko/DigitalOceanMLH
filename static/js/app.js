@@ -1181,64 +1181,45 @@ function hideError() {
     errorMessage.textContent = '';
 }
 
-// ===== 3D Card Magnification =====
+// ===== Simple Image Magnification =====
 function magnifyCard(card) {
-    // Create overlay
+    // Create overlay background
     const overlay = document.createElement('div');
     overlay.className = 'outfit-card-overlay';
 
-    // Get just the image from the card
+    // Get the image from the card
     const originalImg = card.querySelector('.outfit-image');
     if (!originalImg) return; // No image to magnify
 
-    // Create magnified image container
-    const magnifiedCard = document.createElement('div');
-    magnifiedCard.className = 'outfit-card-magnified';
-
-    const img = document.createElement('img');
-    img.src = originalImg.src;
-    img.alt = originalImg.alt;
-    img.className = 'outfit-image-magnified';
-    img.style.width = '100%';
-    img.style.height = 'auto';
-    img.style.display = 'block';
-    img.style.borderRadius = 'var(--radius-sm)';
-
-    magnifiedCard.appendChild(img);
+    // Create large image display
+    const magnifiedImg = document.createElement('img');
+    magnifiedImg.src = originalImg.src;
+    magnifiedImg.alt = originalImg.alt;
+    magnifiedImg.className = 'outfit-image-magnified';
 
     // Add to body
     document.body.appendChild(overlay);
-    document.body.appendChild(magnifiedCard);
+    document.body.appendChild(magnifiedImg);
 
-    // 3D mouse tracking
-    function handleMouseMove(e) {
-        const rect = magnifiedCard.getBoundingClientRect();
-        const cardCenterX = rect.left + rect.width / 2;
-        const cardCenterY = rect.top + rect.height / 2;
+    // Fade in
+    setTimeout(() => {
+        overlay.style.opacity = '1';
+        magnifiedImg.style.opacity = '1';
+        magnifiedImg.style.transform = 'translate(-50%, -50%) scale(1)';
+    }, 10);
 
-        // Calculate normalized mouse position (-1 to 1)
-        const mouseX = (e.clientX - cardCenterX) / (rect.width / 2);
-        const mouseY = (e.clientY - cardCenterY) / (rect.height / 2);
-
-        // Apply 3D rotation (max 20 degrees in both directions)
-        const rotateY = mouseX * 20;  // Horizontal mouse movement -> Y-axis rotation
-        const rotateX = -mouseY * 20; // Vertical mouse movement -> X-axis rotation
-
-        magnifiedCard.style.transform = `
-            translate(-50%, -50%)
-            scale(1.5)
-            perspective(1000px)
-            rotateX(${rotateX}deg)
-            rotateY(${rotateY}deg)
-        `;
-    }
-
-    // Close on overlay click or Escape key
+    // Close function
     function closeCard() {
-        overlay.remove();
-        magnifiedCard.remove();
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('keydown', handleEscape);
+        overlay.style.opacity = '0';
+        magnifiedImg.style.opacity = '0';
+        magnifiedImg.style.transform = 'translate(-50%, -50%) scale(0.9)';
+
+        setTimeout(() => {
+            overlay.remove();
+            magnifiedImg.remove();
+            document.removeEventListener('keydown', handleEscape);
+        }, 300);
+
         // Restore scroll
         document.body.style.overflow = 'auto';
     }
@@ -1249,9 +1230,9 @@ function magnifyCard(card) {
         }
     }
 
+    // Click anywhere to close
     overlay.addEventListener('click', closeCard);
-    magnifiedCard.addEventListener('click', closeCard);
-    document.addEventListener('mousemove', handleMouseMove);
+    magnifiedImg.addEventListener('click', closeCard);
     document.addEventListener('keydown', handleEscape);
 
     // Prevent body scroll
