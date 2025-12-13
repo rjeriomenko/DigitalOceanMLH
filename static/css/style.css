@@ -220,7 +220,8 @@ body {
 }
 
 .chat-messages {
-    max-height: 500px;
+    min-height: 400px;
+    max-height: 600px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -327,34 +328,14 @@ body {
 }
 
 .placeholder-content {
-    text-align: center;
-    padding: 20px;
-}
-
-.placeholder-content .placeholder-icon {
-    font-size: 3rem;
-    margin-bottom: 15px;
-    display: inline-block;
-    animation: wave 2s ease-in-out infinite;
-}
-
-@keyframes wave {
-    0%, 100% { transform: rotate(0deg); }
-    25% { transform: rotate(20deg); }
-    75% { transform: rotate(-20deg); }
-}
-
-.placeholder-content h3 {
-    font-size: 1.3rem;
-    color: var(--text);
-    margin-bottom: 10px;
-    font-weight: 600;
+    text-align: left;
+    padding: 10px 0;
 }
 
 .placeholder-content p {
-    font-size: 1rem;
+    font-size: 0.95rem;
     color: var(--text-muted);
-    line-height: 1.6;
+    line-height: 1.5;
     margin: 0;
 }
 

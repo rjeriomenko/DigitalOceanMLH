@@ -257,9 +257,9 @@ def generate_outfits():
                 emit_progress(socket_sid, "error", "No valid clothing images", 0)
                 return jsonify({'error': 'No valid clothing images provided'}), 400
 
-            if len(clothing_images) > 20:
-                emit_progress(socket_sid, "error", "Too many images (max 20)", 0)
-                return jsonify({'error': f'Too many images. Maximum: 20, provided: {len(clothing_images)}'}), 400
+            if len(clothing_images) > 30:
+                emit_progress(socket_sid, "error", "Too many images (max 30)", 0)
+                return jsonify({'error': f'Too many images. Maximum: 30, provided: {len(clothing_images)}'}), 400
 
             clothing_paths = [img.saved_path for img in clothing_images]
 
@@ -474,11 +474,12 @@ def generate_outfits():
                     'total_outfits': total
                 }, room=socket_sid)
 
-            # Generate outfit images
+            # Generate outfit images (use first selfie if available)
+            selfie_for_generation = selfie_paths[0] if selfie_paths else None
             results = generate_multiple_outfits(
                 outfits,
                 output_dir=app.config['OUTPUT_FOLDER'],
-                selfie_path=selfie_path,
+                selfie_path=selfie_for_generation,
                 progress_callback=outfit_progress_callback
             )
 

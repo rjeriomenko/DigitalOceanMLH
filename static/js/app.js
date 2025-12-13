@@ -214,13 +214,8 @@ function updateProgress(data) {
 selfieInput.addEventListener('change', (e) => {
     const files = Array.from(e.target.files);
 
-    // Limit to 3 selfies
-    if (files.length > 3) {
-        alert('Maximum 3 selfies allowed. Only the first 3 will be used.');
-        selfieFiles = files.slice(0, 3);
-    } else {
-        selfieFiles = files;
-    }
+    // Limit to 3 selfies (silently take first 3)
+    selfieFiles = files.slice(0, 3);
 
     if (selfieFiles.length > 0) {
         displaySelfiePreview(selfieFiles);
@@ -675,8 +670,8 @@ generateBtn.addEventListener('click', async () => {
         return;
     }
 
-    if (clothingFiles.length > 20) {
-        showError('Maximum 20 clothing items allowed');
+    if (clothingFiles.length > 30) {
+        showError('Maximum 30 clothing items allowed');
         return;
     }
 
@@ -825,7 +820,7 @@ function createAssistantPlaceholder(data) {
 
     // Just show loading dots, no content yet
     assistantBubble.innerHTML = `
-        <div class="message-label">Fashion AI</div>
+        <div class="message-label">DebonAIr</div>
         <div class="loading-dots">
             <span></span>
             <span></span>
@@ -882,7 +877,7 @@ function addChatMessage(role, content) {
                 loadingDots.remove();
             }
 
-            let bubbleHTML = '<div class="message-label">Fashion AI</div>';
+            let bubbleHTML = '<div class="message-label">DebonAIr</div>';
 
             // Add query response if exists
             if (content.query_response) {
@@ -900,7 +895,7 @@ function addChatMessage(role, content) {
             const assistantBubble = document.createElement('div');
             assistantBubble.className = 'chat-message-assistant';
 
-            let bubbleHTML = '<div class="message-label">Fashion AI</div>';
+            let bubbleHTML = '<div class="message-label">DebonAIr</div>';
 
             // Add query response if exists
             if (content.query_response) {
