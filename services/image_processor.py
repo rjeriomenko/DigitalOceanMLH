@@ -75,6 +75,70 @@ Keep it under 20 words."""
     return description
 
 
+def describe_person_appearance(selfie_path, api_key=None):
+    """
+    Generate a detailed description of a person's appearance from a selfie.
+
+    Args:
+        selfie_path: Path to the selfie image
+        api_key: Google API key (optional, reads from env if not provided)
+
+    Returns:
+        str: Description of the person's appearance for fashion styling
+
+    Raises:
+        Exception: If API call fails
+    """
+    if api_key is None:
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY not found in environment variables")
+
+    client = genai.Client(api_key=api_key)
+
+    # Read the selfie image
+    image_bytes, mime_type = read_local_image(selfie_path)
+
+    # Create the content for Gemini
+    contents = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                types.Part.from_text(
+                    text="""Describe this person's physical appearance for fashion styling purposes. Include:
+- Apparent gender presentation (male-presenting, female-presenting, androgynous)
+- Approximate age range
+- Body type/build (slim, athletic, average, plus-size, etc.)
+- Height perception (tall, average, short - based on proportions)
+- Skin tone (fair, light, medium, tan, brown, deep, etc.)
+- Hair color and style
+- Any distinctive features relevant to styling
+
+Format as a concise paragraph suitable for a fashion stylist to understand who they're dressing.
+Keep it professional, objective, and fashion-focused. Under 50 words."""
+                ),
+            ],
+        )
+    ]
+
+    # Configure for text-only response
+    generate_content_config = types.GenerateContentConfig(
+        response_modalities=["TEXT"],
+        temperature=0.3,
+    )
+
+    # Generate description
+    response = client.models.generate_content(
+        model="gemini-2.5-flash-image",
+        contents=contents,
+        config=generate_content_config,
+    )
+
+    description = response.text.strip()
+    return description
+
+
 def describe_clothing_items(image_paths, api_key=None, rate_limit_delay=0.2):
     """
     Generate descriptions for multiple clothing items.

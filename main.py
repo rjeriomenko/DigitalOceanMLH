@@ -8,10 +8,11 @@ A hackathon project that generates personalized outfit images using:
 - Gemini NanoBanana for image generation
 
 Usage:
-    python main.py image1.jpg image2.jpg image3.jpg [... up to 10 images]
+    python main.py <image1.jpg> <image2.jpg> ... [--selfie <selfie.jpg>]
 
 Example:
     python main.py clothing/shirt.jpg clothing/pants.jpg clothing/jacket.jpg
+    python main.py clothing/*.jpg --selfie selfies/me.jpg
 """
 
 import sys
@@ -22,8 +23,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import our services
-from services.utils import validate_image_paths
-from services.image_processor import describe_clothing_items
+from services.utils import validate_image_paths, validate_image_path
+from services.image_processor import describe_clothing_items, describe_person_appearance
 from services.gradient_agent import select_outfit
 from services.gemini_generator import generate_multiple_outfits
 
@@ -46,9 +47,13 @@ def print_banner():
 def print_usage():
     """Print usage instructions"""
     print("\nUsage:")
-    print("  python main.py <image1.jpg> <image2.jpg> ... [up to 20 images]")
-    print("\nExample:")
+    print("  python main.py <image1.jpg> <image2.jpg> ... [--selfie <selfie.jpg>]")
+    print("\nExamples:")
     print("  python main.py clothing/shirt.jpg clothing/pants.jpg clothing/jacket.jpg")
+    print("  python main.py clothing/*.jpg --selfie selfies/me.jpg")
+    print("\nArguments:")
+    print("  clothing images    1-20 images of clothing items")
+    print("  --selfie IMAGE     (Optional) Your photo for personalized outfit generation")
     print("\nRequirements:")
     print("  - 1-20 clothing item images")
     print("  - Valid image formats: jpg, jpeg, png, gif, bmp, webp")
@@ -102,10 +107,27 @@ def main():
         print_usage()
         sys.exit(0)
 
-    # Get image paths from command line
-    image_paths = sys.argv[1:]
+    # Parse command line arguments
+    image_paths = []
+    selfie_path = None
+
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        if args[i] == '--selfie':
+            if i + 1 < len(args):
+                selfie_path = args[i + 1]
+                i += 2
+            else:
+                print("❌ Error: --selfie requires an image path")
+                sys.exit(1)
+        else:
+            image_paths.append(args[i])
+            i += 1
 
     print(f"📸 Received {len(image_paths)} clothing images")
+    if selfie_path:
+        print(f"🤳 Personalized mode: Using selfie from {selfie_path}")
     print("-" * 55)
 
     try:
@@ -118,7 +140,18 @@ def main():
         # Step 1: Validate images
         print("\n📋 Step 1: Validating images...")
         validate_image_paths(image_paths, max_count=20)
-        print(f"   ✓ All {len(image_paths)} images are valid")
+        print(f"   ✓ All {len(image_paths)} clothing images are valid")
+
+        # Validate selfie if provided
+        person_description = None
+        if selfie_path:
+            validate_image_path(selfie_path)
+            print(f"   ✓ Selfie image is valid")
+
+            # Describe the person
+            print("\n👤 Step 1b: Analyzing your appearance...")
+            person_description = describe_person_appearance(selfie_path)
+            print(f"   Person: {person_description}")
 
         # Step 2: Generate semantic descriptions
         print("\n🔍 Step 2: Analyzing clothing items with Gemini Vision...")
@@ -126,8 +159,11 @@ def main():
         print(f"   ✓ Generated descriptions for {len(clothing_descriptions)} items")
 
         # Step 3: Agent selects outfits (1-3 combinations)
-        print("\n👔 Step 3: Consulting DigitalOcean fashion agent for outfit combinations...")
-        outfits = select_outfit(clothing_descriptions)
+        if person_description:
+            print("\n👔 Step 3: Consulting DigitalOcean fashion agent for personalized outfit combinations...")
+        else:
+            print("\n👔 Step 3: Consulting DigitalOcean fashion agent for outfit combinations...")
+        outfits = select_outfit(clothing_descriptions, person_description=person_description)
 
         print(f"   ✓ Agent created {len(outfits)} outfit(s)")
         for outfit in outfits:
@@ -136,8 +172,11 @@ def main():
             print(f"      Style: {outfit['reasoning'][:80]}...")
 
         # Step 4: Generate outfit images in parallel
-        print(f"\n🎨 Step 4: Generating {len(outfits)} outfit image(s) with Gemini NanoBanana...")
-        results = generate_multiple_outfits(outfits, output_dir="output")
+        if selfie_path:
+            print(f"\n🎨 Step 4: Generating {len(outfits)} personalized outfit image(s) with Gemini NanoBanana...")
+        else:
+            print(f"\n🎨 Step 4: Generating {len(outfits)} outfit image(s) with Gemini NanoBanana...")
+        results = generate_multiple_outfits(outfits, output_dir="output", selfie_path=selfie_path)
 
         # Success!
         print("\n" + "=" * 55)

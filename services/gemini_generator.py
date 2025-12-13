@@ -14,13 +14,14 @@ from google.genai import types
 from .utils import read_local_image, save_binary_file
 
 
-def generate_outfit_image(selected_image_paths, output_dir="output", api_key=None):
+def generate_outfit_image(selected_image_paths, output_dir="output", selfie_path=None, api_key=None):
     """
     Generate an outfit image using Gemini's image generation capabilities.
 
     Args:
         selected_image_paths: List of paths to selected clothing images
         output_dir: Directory to save generated images (default: "output")
+        selfie_path: Optional path to user's selfie image
         api_key: Google API key (optional, reads from env)
 
     Returns:
@@ -47,11 +48,20 @@ def generate_outfit_image(selected_image_paths, output_dir="output", api_key=Non
     client = genai.Client(api_key=api_key)
     model = "gemini-3-pro-image-preview"
 
+    # Read selfie if provided
+    if selfie_path:
+        try:
+            print(f"  Loading selfie: {os.path.basename(selfie_path)}")
+            selfie_bytes, selfie_mime = read_local_image(selfie_path)
+        except Exception as e:
+            print(f"  ✗ Error loading selfie: {e}")
+            selfie_path = None  # Disable if loading fails
+
     # Read all selected images
     image_parts = []
     for idx, image_path in enumerate(selected_image_paths, start=1):
         try:
-            print(f"  Loading image {idx}: {os.path.basename(image_path)}")
+            print(f"  Loading clothing item {idx}: {os.path.basename(image_path)}")
             image_bytes, mime_type = read_local_image(image_path)
             image_parts.append(
                 types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
@@ -60,8 +70,24 @@ def generate_outfit_image(selected_image_paths, output_dir="output", api_key=Non
             print(f"  ✗ Error loading image {idx}: {e}")
             # Continue with other images
 
-    # Create the prompt
-    prompt = """You are given images of articles of clothing. Please generate a high-quality, realistic fashion photograph showing a model wearing EXACTLY these clothing items and NOTHING ELSE.
+    # Create the prompt based on whether we have a selfie
+    if selfie_path:
+        # Add selfie to the beginning of image parts
+        image_parts.insert(0, types.Part.from_bytes(data=selfie_bytes, mime_type=selfie_mime))
+
+        prompt = """You are given a photo of a person followed by images of clothing items. Please generate a high-quality, realistic fashion photograph showing THIS SPECIFIC PERSON wearing EXACTLY the clothing items provided.
+
+Requirements:
+- Generate an image of the SAME PERSON from the first photo (match their appearance, face, body type, skin tone, etc.)
+- Show them wearing ONLY the clothing items provided in the subsequent images
+- Create a professional fashion photo style with appropriate lighting and composition
+- Use a neutral pose that clearly shows the outfit
+- Ensure all clothing items are clearly visible and well-coordinated on this person
+- The person's appearance should match the reference photo as closely as possible
+
+Do not add any additional clothing, accessories, or items not shown in the input images. The person must look like the individual in the reference photo."""
+    else:
+        prompt = """You are given images of articles of clothing. Please generate a high-quality, realistic fashion photograph showing a model wearing EXACTLY these clothing items and NOTHING ELSE.
 
 Requirements:
 - Show ONLY the clothing items provided in the images
@@ -219,13 +245,14 @@ def generate_outfit_image_simple(image_paths, prompt, output_dir="output", api_k
     return generated_path
 
 
-def generate_multiple_outfits(outfits, output_dir="output", api_key=None):
+def generate_multiple_outfits(outfits, output_dir="output", selfie_path=None, api_key=None):
     """
     Generate multiple outfit images in parallel using async processing.
 
     Args:
         outfits: List of outfit dicts from gradient_agent.select_outfit()
         output_dir: Directory to save generated images
+        selfie_path: Optional path to user's selfie for personalized generation
         api_key: Google API key (optional)
 
     Returns:
@@ -254,10 +281,12 @@ def generate_multiple_outfits(outfits, output_dir="output", api_key=None):
                 loop = asyncio.get_event_loop()
                 image_path = await loop.run_in_executor(
                     None,
-                    generate_outfit_image,
-                    outfit["selected_paths"],
-                    output_dir,
-                    api_key
+                    lambda: generate_outfit_image(
+                        outfit["selected_paths"],
+                        output_dir,
+                        selfie_path,
+                        api_key
+                    )
                 )
 
                 outfit["generated_image_path"] = image_path
