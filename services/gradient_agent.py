@@ -60,52 +60,72 @@ def select_outfit(clothing_descriptions, person_description=None, agent_access_k
 PERSON TO DRESS:
 {person_description}
 
-You are creating outfits specifically for this person. Consider their body type, coloring, and style when selecting items that will flatter them.
+IMPORTANT STYLING INSTRUCTIONS:
+- You are creating outfits specifically for this person
+- The person description includes what they're CURRENTLY WEARING in their photo
+- You can MIX AND MATCH: Keep some items from their current outfit and swap in items from the wardrobe
+- You can also create entirely new outfits using only wardrobe items
+- Consider their body type, coloring, and style when selecting items that will flatter them
+- When keeping items from their current outfit, reference them clearly (e.g., "their current white sneakers")
 """
 
     prompt = f"""I have the following clothing items in my wardrobe:
 
 {items_text}{person_context}
 
-Based on your expertise as a fashion stylist, please create 1-3 DIFFERENT outfit combinations from these items.
+Based on your expertise as a fashion stylist, please create 1-3 DIFFERENT outfit combinations.
 
 REQUIREMENTS:
 - Create AT LEAST 1 outfit (always required)
 - Create UP TO 3 outfits total if there are enough suitable items
 - Each outfit should have 3-5 items
+- You can use ONLY wardrobe items, OR mix wardrobe items with what they're currently wearing
 - Outfits should be distinct from each other (different styles, occasions, or color schemes)
-- Only create multiple outfits if the wardrobe has enough variety
+- Only create multiple outfits if there's enough variety
 
 CRITICAL INSTRUCTION - Response Format:
 Your response must have EXACTLY this format:
 
 OUTFIT 1:
-[item numbers separated by commas]
-[brief 1-2 sentence explanation]
+[item numbers and/or current outfit items separated by commas]
+[brief 1-2 sentence style explanation]
+WEAR: [specific wearing instructions - e.g., "jacket open, shirt tucked in, hat backwards"]
 
 OUTFIT 2:
-[item numbers separated by commas]
-[brief 1-2 sentence explanation]
+[item numbers and/or current outfit items separated by commas]
+[brief 1-2 sentence style explanation]
+WEAR: [specific wearing instructions]
 
 OUTFIT 3:
-[item numbers separated by commas]
-[brief 1-2 sentence explanation]
+[item numbers and/or current outfit items separated by commas]
+[brief 1-2 sentence style explanation]
+WEAR: [specific wearing instructions]
 
-CORRECT Example:
+CORRECT Example (mixing current outfit with wardrobe):
 OUTFIT 1:
-2,4,5
-A classic casual look with complementary earth tones and balanced proportions.
+2,4,current_sneakers
+A casual look mixing the wardrobe jeans and tee with their existing white sneakers.
+WEAR: Shirt untucked, sleeves rolled up, sneakers laced loosely
 
-OUTFIT 2:
+CORRECT Example (wardrobe only):
+OUTFIT 1:
 1,3,7
-A bold streetwear ensemble featuring coordinating colors and modern silhouettes.
+A bold streetwear ensemble with coordinating colors.
+WEAR: Jacket zipped halfway, hat facing forward, high-top sneakers tied
+
+WEARING INSTRUCTIONS MUST INCLUDE:
+- How tops should be worn (buttoned/unbuttoned, tucked/untucked, collar position, etc.)
+- How jackets/outerwear should be worn (open/closed, zipped/unzipped, sleeves rolled, etc.)
+- How accessories should be worn (hat direction, glasses position, etc.)
+- How bottoms should be styled (cuffed, belted, etc.)
+- How footwear should be laced/styled
 
 INCORRECT Examples:
-- DO NOT include <think> tags or reasoning before the outfits
-- DO NOT write explanations on the same line as item numbers
-- DO NOT repeat the same items in every outfit unless necessary
+- DO NOT include <think> tags
+- DO NOT skip the WEAR: line
+- DO NOT write vague wear instructions like "wear normally"
 
-Remember: Create 1-3 distinct outfits. Always label them as OUTFIT 1:, OUTFIT 2:, etc."""
+Remember: Create 1-3 distinct outfits with DETAILED wearing instructions. Always label them as OUTFIT 1:, OUTFIT 2:, etc."""
 
     print("\nConsulting fashion agent for outfit selection...")
 
@@ -213,14 +233,25 @@ def parse_multiple_outfits(response_text, clothing_descriptions):
             if item['index'] in selected_indices
         ]
 
-        # Remaining lines are the reasoning
-        reasoning = ' '.join(lines[1:]) if len(lines) > 1 else "No explanation provided"
+        # Extract reasoning and wearing instructions
+        reasoning = ""
+        wearing_instructions = ""
+
+        for line in lines[1:]:
+            if line.startswith("WEAR:"):
+                wearing_instructions = line.replace("WEAR:", "").strip()
+            elif not wearing_instructions:  # Only add to reasoning if we haven't hit WEAR: yet
+                reasoning += line + " "
+
+        reasoning = reasoning.strip() if reasoning else "No explanation provided"
+        wearing_instructions = wearing_instructions if wearing_instructions else "Wear as styled in image"
 
         outfits.append({
             "outfit_number": outfit_number,
             "selected_indices": selected_indices,
             "selected_paths": selected_paths,
-            "reasoning": reasoning
+            "reasoning": reasoning,
+            "wearing_instructions": wearing_instructions
         })
 
     return outfits

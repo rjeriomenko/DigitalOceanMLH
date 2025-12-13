@@ -170,6 +170,7 @@ def main():
             print(f"\n   Outfit {outfit['outfit_number']}:")
             print(f"      Items: {', '.join(map(str, outfit['selected_indices']))}")
             print(f"      Style: {outfit['reasoning'][:80]}...")
+            print(f"      Wear: {outfit.get('wearing_instructions', 'N/A')[:60]}...")
 
         # Step 4: Generate outfit images in parallel
         if selfie_path:

@@ -14,7 +14,7 @@ from google.genai import types
 from .utils import read_local_image, save_binary_file
 
 
-def generate_outfit_image(selected_image_paths, output_dir="output", selfie_path=None, api_key=None):
+def generate_outfit_image(selected_image_paths, output_dir="output", selfie_path=None, wearing_instructions=None, api_key=None):
     """
     Generate an outfit image using Gemini's image generation capabilities.
 
@@ -22,6 +22,7 @@ def generate_outfit_image(selected_image_paths, output_dir="output", selfie_path
         selected_image_paths: List of paths to selected clothing images
         output_dir: Directory to save generated images (default: "output")
         selfie_path: Optional path to user's selfie image
+        wearing_instructions: How clothes should be worn (optional)
         api_key: Google API key (optional, reads from env)
 
     Returns:
@@ -70,31 +71,41 @@ def generate_outfit_image(selected_image_paths, output_dir="output", selfie_path
             print(f"  ✗ Error loading image {idx}: {e}")
             # Continue with other images
 
+    # Build wearing instructions text
+    wear_text = ""
+    if wearing_instructions:
+        wear_text = f"\n\nWEARING INSTRUCTIONS:\n{wearing_instructions}\n\nFollow these instructions EXACTLY when styling the outfit."
+
     # Create the prompt based on whether we have a selfie
     if selfie_path:
         # Add selfie to the beginning of image parts
         image_parts.insert(0, types.Part.from_bytes(data=selfie_bytes, mime_type=selfie_mime))
 
-        prompt = """You are given a photo of a person followed by images of clothing items. Please generate a high-quality, realistic fashion photograph showing THIS SPECIFIC PERSON wearing EXACTLY the clothing items provided.
+        prompt = f"""You are given a photo of a person followed by images of clothing items. Please generate a high-quality, realistic fashion photograph showing THIS SPECIFIC PERSON wearing the outfit as specified.
 
-Requirements:
+CRITICAL REQUIREMENTS:
 - Generate an image of the SAME PERSON from the first photo (match their appearance, face, body type, skin tone, etc.)
-- Show them wearing ONLY the clothing items provided in the subsequent images
+- The person may be wearing some clothes in their reference photo - you can KEEP those items OR SWAP them with provided wardrobe items
+- You have FULL PERMISSION to mix and match: keep items from their current outfit and add new wardrobe items
+- Show the clothing items styled according to the wearing instructions below
 - Create a professional fashion photo style with appropriate lighting and composition
-- Use a neutral pose that clearly shows the outfit
-- Ensure all clothing items are clearly visible and well-coordinated on this person
-- The person's appearance should match the reference photo as closely as possible
+- Use a pose that clearly shows the outfit and wearing details
+- The person's appearance must match the reference photo as closely as possible{wear_text}
 
-Do not add any additional clothing, accessories, or items not shown in the input images. The person must look like the individual in the reference photo."""
+MIXING PERMISSION:
+- If an item type is shown in wardrobe images (e.g., new shirt), use that instead of what they're wearing
+- If an item type is NOT in wardrobe images (e.g., no new shoes), you may keep what they're wearing in the reference photo
+- The goal is to show this specific person in the best version of the styled outfit"""
     else:
-        prompt = """You are given images of articles of clothing. Please generate a high-quality, realistic fashion photograph showing a model wearing EXACTLY these clothing items and NOTHING ELSE.
+        prompt = f"""You are given images of articles of clothing. Please generate a high-quality, realistic fashion photograph showing a model wearing EXACTLY these clothing items styled as specified.
 
 Requirements:
 - Show ONLY the clothing items provided in the images
+- Style the outfit according to the wearing instructions below
 - Create a professional fashion photo style
 - Use appropriate lighting and composition
-- The model should be a realistic person in a neutral pose
-- Ensure all clothing items are clearly visible and well-coordinated
+- The model should be a realistic person in a pose that shows the styling details
+- Ensure all clothing items are clearly visible and styled as instructed{wear_text}
 
 Do not add any additional clothing, accessories, or items not shown in the input images."""
 
@@ -285,6 +296,7 @@ def generate_multiple_outfits(outfits, output_dir="output", selfie_path=None, ap
                         outfit["selected_paths"],
                         output_dir,
                         selfie_path,
+                        outfit.get("wearing_instructions"),
                         api_key
                     )
                 )

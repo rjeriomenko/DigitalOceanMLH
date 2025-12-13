@@ -106,17 +106,24 @@ def describe_person_appearance(selfie_path, api_key=None):
             parts=[
                 types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                 types.Part.from_text(
-                    text="""Describe this person's physical appearance for fashion styling purposes. Include:
+                    text="""Describe this person's physical appearance AND current outfit for fashion styling purposes.
+
+PART 1 - Person's Appearance:
 - Apparent gender presentation (male-presenting, female-presenting, androgynous)
 - Approximate age range
 - Body type/build (slim, athletic, average, plus-size, etc.)
 - Height perception (tall, average, short - based on proportions)
 - Skin tone (fair, light, medium, tan, brown, deep, etc.)
 - Hair color and style
-- Any distinctive features relevant to styling
 
-Format as a concise paragraph suitable for a fashion stylist to understand who they're dressing.
-Keep it professional, objective, and fashion-focused. Under 50 words."""
+PART 2 - Current Outfit (what they're wearing in the photo):
+List each visible clothing item/accessory they're currently wearing:
+- Top(s): shirts, jackets, etc.
+- Bottom(s): pants, skirts, etc.
+- Footwear: shoes, boots, etc.
+- Accessories: hats, glasses, jewelry, bags, etc.
+
+Format as two clear sections. Be concise but complete. Under 100 words total."""
                 ),
             ],
         )
