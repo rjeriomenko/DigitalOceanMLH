@@ -51,3 +51,8 @@ htmlcov/
 
 # Logs
 *.log
+
+# Generated output images
+output/
+NanoBanana_Output_*.jpg
+NanoBanana_Output_*.png
