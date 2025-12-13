@@ -247,6 +247,11 @@ function updateGenerateButtonText() {
     }
 }
 
+// Listen to query input changes to update button text
+queryInput.addEventListener('input', () => {
+    updateGenerateButtonText();
+});
+
 function updateFileLabel(input, text) {
     const label = input.nextElementSibling;
     const labelText = label.querySelector('.file-label-text');
@@ -877,19 +882,59 @@ function addChatMessage(role, content) {
                 loadingDots.remove();
             }
 
-            let bubbleHTML = '<div class="message-label">DebonAIr</div>';
+            // Check if outfits grid already exists (from live preview)
+            let existingOutfitsGrid = assistantBubble.querySelector('.outfits-grid');
 
-            // Add query response if exists
-            if (content.query_response) {
-                bubbleHTML += `<div class="message-text">${escapeHtml(content.query_response)}</div>`;
+            // Only rebuild if no existing outfits grid, otherwise preserve it
+            if (!existingOutfitsGrid) {
+                let bubbleHTML = '<div class="message-label">DebonAIr</div>';
+
+                // Add query response if exists
+                if (content.query_response) {
+                    bubbleHTML += `<div class="message-text">${escapeHtml(content.query_response)}</div>`;
+                }
+
+                // Add outfits grid
+                if (content.outfits && content.outfits.length > 0) {
+                    bubbleHTML += '<div class="outfits-grid"></div>';
+                }
+
+                assistantBubble.innerHTML = bubbleHTML;
+                existingOutfitsGrid = assistantBubble.querySelector('.outfits-grid');
             }
 
-            // Add outfits grid
-            if (content.outfits && content.outfits.length > 0) {
-                bubbleHTML += '<div class="outfits-grid"></div>';
-            }
+            // Update outfit cards with details if they exist
+            if (content.outfits && content.outfits.length > 0 && existingOutfitsGrid) {
+                content.outfits.forEach(outfit => {
+                    let existingCard = existingOutfitsGrid.querySelector(`[data-outfit-number="${outfit.outfit_number}"]`);
 
-            assistantBubble.innerHTML = bubbleHTML;
+                    if (existingCard) {
+                        // Update the existing card with full details
+                        const details = existingCard.querySelector('.outfit-details');
+                        if (details) {
+                            // Preserve thumbnails if they exist
+                            const thumbnails = details.querySelector('.outfit-thumbnails');
+
+                            details.innerHTML = `
+                                <h4>Style</h4>
+                                <p>${outfit.reasoning}</p>
+                                <h4>How to Wear</h4>
+                                <p>${outfit.wearing_instructions}</p>
+                                ${outfit.fashion_advice ? `<h4>Fashion Tip</h4><p class="fashion-advice">💡 ${outfit.fashion_advice}</p>` : ''}
+                            `;
+
+                            // Re-add thumbnails if they existed
+                            if (thumbnails) {
+                                details.insertBefore(thumbnails, details.firstChild);
+                            }
+                        }
+                    } else {
+                        // Create new card if it doesn't exist
+                        const card = createOutfitCard(outfit);
+                        existingOutfitsGrid.appendChild(card);
+                    }
+                });
+            }
         } else {
             // Create new message bubble
             const assistantBubble = document.createElement('div');
@@ -1139,7 +1184,7 @@ function createPlaceholderOutfitCard(outfitNumber) {
         <div class="outfit-header">Outfit ${outfitNumber}</div>
         <div class="outfit-image-placeholder">
             <div class="loading-spinner">
-                <div class="spinner-icon">⏳</div>
+                <div class="spinner-circle"></div>
                 <div class="spinner-text">Generating...</div>
             </div>
         </div>
