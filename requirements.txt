@@ -3,3 +3,6 @@ gradient>=1.0.0
 
 # For improved async performance
 aiohttp>=3.9.0
+
+# Load environment variables from .env file
+python-dotenv>=1.0.0

@@ -85,7 +85,6 @@ This will run several examples demonstrating:
 - Basic chat completions
 - Streaming responses
 - Async operations
-- Creating embeddings
 
 ## Available Models
 
@@ -94,7 +93,6 @@ The Gradient platform supports various models including:
 - **Llama 3.3 70B Instruct** (`llama3.3-70b-instruct`) - General purpose chat
 - **Llama 3.1 8B Instruct** (`llama3.1-8b-instruct`) - Smaller, faster model
 - **Mistral 7B Instruct** (`mistral-7b-instruct-v0.3`) - Alternative instruction model
-- **BGE Large EN v1.5** (`bge-large-en-v1.5`) - Text embeddings
 
 See the [official documentation](https://docs.digitalocean.com/products/gradient-ai-platform/) for the complete list of available models.
 

@@ -8,7 +8,11 @@ This script demonstrates basic usage of the Gradient SDK for:
 """
 
 import os
+from dotenv import load_dotenv
 from gradient import Gradient
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 def basic_chat_completion():
@@ -95,33 +99,13 @@ def async_chat_completion():
     asyncio.run(run_async())
 
 
-def embeddings_example():
-    """Example of creating embeddings"""
-    print("=" * 50)
-    print("Embeddings Example")
-    print("=" * 50)
-
-    client = Gradient()
-
-    # Create embeddings for text
-    response = client.embeddings.create(
-        input=["Hello world", "DigitalOcean Gradient is awesome!"],
-        model="bge-large-en-v1.5"
-    )
-
-    print(f"\nNumber of embeddings: {len(response.data)}")
-    print(f"Embedding dimensions: {len(response.data[0].embedding)}")
-    print(f"First few values of first embedding: {response.data[0].embedding[:5]}")
-    print()
-
-
 def main():
     """Run all examples"""
     # Check if API key is set
     if not os.environ.get("GRADIENT_MODEL_ACCESS_KEY"):
         print("ERROR: GRADIENT_MODEL_ACCESS_KEY not found in environment variables.")
-        print("Please set the GRADIENT_MODEL_ACCESS_KEY environment variable.")
-        print("Example: export GRADIENT_MODEL_ACCESS_KEY=your_key_here")
+        print("Please add your credentials to the .env file.")
+        print("Copy .env.example to .env and fill in your actual API keys.")
         return
 
     print("\nDigitalOcean Gradient Python SDK Examples")
@@ -133,13 +117,12 @@ def main():
         basic_chat_completion()
         streaming_chat_completion()
         async_chat_completion()
-        embeddings_example()
 
         print("All examples completed successfully!")
 
     except Exception as e:
         print(f"Error: {e}")
-        print("\nPlease ensure your credentials are properly set in environment variables.")
+        print("\nPlease ensure your credentials are properly set in the .env file.")
 
 
 if __name__ == "__main__":
