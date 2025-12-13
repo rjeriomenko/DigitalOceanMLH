@@ -19,6 +19,12 @@
     <div class="vertical-text vertical-text-left">Debon</div>
     <div class="vertical-text vertical-text-right">AIr</div>
 
+    <!-- Weather Display -->
+    <div id="weather-display" class="location-tag">
+        <span class="location-icon">📍</span>
+        <span class="location-text">Loading...</span>
+    </div>
+
     <div class="container">
         <!-- Mobile header with DebonAIr -->
         <div class="mobile-header">
@@ -69,9 +75,11 @@
                     </label>
                     <div class="file-input-wrapper">
                         <input type="file" id="selfie" accept="image/*" multiple class="file-input">
-                        <label for="selfie" class="file-label">
-                            <span class="file-label-text">Choose selfies...</span>
-                        </label>
+                        <div id="selfie-drop-zone" class="drop-zone">
+                            <label for="selfie" class="file-label">
+                                <span class="file-label-text">Choose selfies or drag & drop here</span>
+                            </label>
+                        </div>
                         <button type="button" id="clear-selfie-btn" class="btn-clear" style="display: none;" onclick="clearSelfie()">Clear Selfies</button>
                         <div id="selfie-preview" class="preview-container"></div>
                     </div>
@@ -83,9 +91,14 @@
                     </label>
                     <div class="file-input-wrapper">
                         <input type="file" id="clothing" accept="image/*" multiple class="file-input">
-                        <label for="clothing" class="file-label">
-                            <span class="file-label-text">Choose clothing images...</span>
-                        </label>
+                        <div id="clothing-drop-zone" class="drop-zone">
+                            <label for="clothing" class="file-label">
+                                <span class="file-label-text">Choose clothing images or drag & drop here</span>
+                            </label>
+                        </div>
+                        <button type="button" id="insert-default-btn" class="btn-insert-default" onclick="insertDefaultClothes()">
+                            Insert Default Clothes (Demo)
+                        </button>
                         <button type="button" id="clear-clothing-btn" class="btn-clear" style="display: none;" onclick="clearClothing()">Clear All Clothing</button>
                         <div id="clothing-preview" class="preview-container"></div>
 

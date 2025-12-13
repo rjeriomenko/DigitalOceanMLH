@@ -86,18 +86,58 @@ function startCarousel() {
     const leftSide = document.querySelector('.carousel-left');
     const rightSide = document.querySelector('.carousel-right');
 
-    // Set initial images
-    leftSide.style.backgroundImage = `url('/unsplash/${unsplashImages[leftIndex]}')`;
-    rightSide.style.backgroundImage = `url('/unsplash/${unsplashImages[rightIndex]}')`;
+    // Create initial images
+    const leftImg = document.createElement('div');
+    leftImg.className = 'carousel-image';
+    leftImg.style.backgroundImage = `url('/unsplash/${unsplashImages[leftIndex]}')`;
+    leftSide.appendChild(leftImg);
 
-    // Carousel loop: display - wait 2s - scroll to next
+    const rightImg = document.createElement('div');
+    rightImg.className = 'carousel-image';
+    rightImg.style.backgroundImage = `url('/unsplash/${unsplashImages[rightIndex]}')`;
+    rightSide.appendChild(rightImg);
+
+    // Carousel loop: display - wait 2s - slide to next
     carouselInterval = setInterval(() => {
-        leftIndex = (leftIndex + 1) % 6;
-        rightIndex = 6 + ((rightIndex - 6 + 1) % 6);
+        // Get next indices
+        const nextLeftIndex = (leftIndex + 1) % 6;
+        const nextRightIndex = 6 + ((rightIndex - 6 + 1) % 6);
 
-        leftSide.style.backgroundImage = `url('/unsplash/${unsplashImages[leftIndex]}')`;
-        rightSide.style.backgroundImage = `url('/unsplash/${unsplashImages[rightIndex]}')`;
-    }, 2000);
+        // Create new images positioned off-screen
+        const newLeftImg = document.createElement('div');
+        newLeftImg.className = 'carousel-image slide-in';
+        newLeftImg.style.backgroundImage = `url('/unsplash/${unsplashImages[nextLeftIndex]}')`;
+        leftSide.appendChild(newLeftImg);
+
+        const newRightImg = document.createElement('div');
+        newRightImg.className = 'carousel-image slide-in';
+        newRightImg.style.backgroundImage = `url('/unsplash/${unsplashImages[nextRightIndex]}')`;
+        rightSide.appendChild(newRightImg);
+
+        // Trigger slide animations
+        setTimeout(() => {
+            // Slide out current images
+            const currentLeftImg = leftSide.querySelector('.carousel-image:not(.slide-in)');
+            const currentRightImg = rightSide.querySelector('.carousel-image:not(.slide-in)');
+
+            if (currentLeftImg) currentLeftImg.classList.add('slide-out');
+            if (currentRightImg) currentRightImg.classList.add('slide-out');
+
+            // Slide in new images
+            newLeftImg.classList.remove('slide-in');
+            newRightImg.classList.remove('slide-in');
+
+            // Remove old images after animation
+            setTimeout(() => {
+                if (currentLeftImg) currentLeftImg.remove();
+                if (currentRightImg) currentRightImg.remove();
+            }, 1000);
+        }, 50);
+
+        // Update indices
+        leftIndex = nextLeftIndex;
+        rightIndex = nextRightIndex;
+    }, 4000); // Changed from 2000ms to 4000ms (4 seconds)
 }
 
 function stopCarousel() {
@@ -212,14 +252,16 @@ function applyBackground(imageUrl, location, weather) {
         bgDiv.style.opacity = '1';
     }, 3100);
 
-    // Add location indicator
-    const locationTag = document.createElement('div');
-    locationTag.className = 'location-tag';
-    locationTag.innerHTML = `
-        <span class="location-icon">📍</span>
-        <span class="location-text">${location} • ${weather}</span>
-    `;
-    document.body.appendChild(locationTag);
+    // Update existing weather display instead of creating new one
+    const existingWeatherDisplay = document.getElementById('weather-display');
+    if (existingWeatherDisplay) {
+        const locationText = existingWeatherDisplay.querySelector('.location-text');
+        if (locationText) {
+            // Keep the temperature that was loaded, just update location/weather if needed
+            // Don't overwrite - the loadWeather function already populated it correctly
+            console.log('Weather display already loaded with full data');
+        }
+    }
 }
 
 // ===== Progress Updates =====
@@ -1256,8 +1298,137 @@ function createPlaceholderOutfitCard(outfitNumber) {
     return card;
 }
 
+// ===== Weather Display =====
+async function loadWeather() {
+    try {
+        const response = await fetch('/api/weather');
+        if (response.ok) {
+            const data = await response.json();
+            const weatherDisplay = document.getElementById('weather-display');
+            const locationText = weatherDisplay.querySelector('.location-text');
+
+            // Format: "72°F • New York • clear/sunny"
+            locationText.textContent = `${Math.round(data.temperature)}°${data.unit} • ${data.location} • ${data.description}`;
+        }
+    } catch (error) {
+        console.error('Error loading weather:', error);
+    }
+}
+
+// ===== Insert Default Clothes =====
+async function insertDefaultClothes() {
+    const insertBtn = document.getElementById('insert-default-btn');
+    const originalText = insertBtn.textContent;
+
+    try {
+        insertBtn.disabled = true;
+        insertBtn.textContent = 'Loading...';
+
+        // Fetch 30 random clothing images from the /clothing folder
+        const response = await fetch('/api/default-wardrobe');
+        if (response.ok) {
+            const data = await response.json();
+            const fileList = data.files;
+
+            // Create File objects from URLs
+            const files = [];
+            for (let i = 0; i < fileList.length; i++) {
+                const filename = fileList[i];
+                const fileResponse = await fetch(`/clothing/${filename}`);
+                const blob = await fileResponse.blob();
+                const file = new File([blob], filename, { type: blob.type });
+                files.push(file);
+            }
+
+            // Add to existing clothing files
+            clothingFiles = [...clothingFiles, ...files];
+            displayClothingPreviews(clothingFiles);
+
+            insertBtn.textContent = `Inserted ${files.length} items`;
+            setTimeout(() => {
+                insertBtn.textContent = originalText;
+                insertBtn.disabled = false;
+            }, 2000);
+        }
+    } catch (error) {
+        console.error('Error inserting default clothes:', error);
+        insertBtn.textContent = 'Error';
+        setTimeout(() => {
+            insertBtn.textContent = originalText;
+            insertBtn.disabled = false;
+        }, 2000);
+    }
+}
+
+// ===== Drag and Drop =====
+function setupDragAndDrop() {
+    const selfieDropZone = document.getElementById('selfie-drop-zone');
+    const clothingDropZone = document.getElementById('clothing-drop-zone');
+
+    // Selfie drop zone
+    setupDropZone(selfieDropZone, selfieInput, (files) => {
+        // Limit to 3 selfies
+        const remaining = 3 - selfieFiles.length;
+        const filesToAdd = Array.from(files).slice(0, remaining);
+        selfieFiles = [...selfieFiles, ...filesToAdd];
+        displaySelfiePreview(selfieFiles);
+    });
+
+    // Clothing drop zone
+    setupDropZone(clothingDropZone, clothingInput, (files) => {
+        // Limit to 30 clothing items
+        const remaining = 30 - clothingFiles.length;
+        const filesToAdd = Array.from(files).slice(0, remaining);
+        clothingFiles = [...clothingFiles, ...filesToAdd];
+        displayClothingPreviews(clothingFiles);
+    });
+}
+
+function setupDropZone(dropZone, fileInput, onFilesAdded) {
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+
+    // Highlight drop zone when item is dragged over it
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.classList.add('drag-over');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.classList.remove('drag-over');
+        }, false);
+    });
+
+    // Handle dropped files
+    dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        if (files.length > 0) {
+            onFilesAdded(files);
+        }
+    }, false);
+}
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+// ===== Initialize on Page Load =====
+document.addEventListener('DOMContentLoaded', () => {
+    loadWeather();
+    setupDragAndDrop();
+});
+
 // ===== Make Functions Global =====
 window.removeSelfie = removeSelfie;
 window.clearSelfie = clearSelfie;
 window.removeClothing = removeClothing;
 window.clearClothing = clearClothing;
+window.insertDefaultClothes = insertDefaultClothes;

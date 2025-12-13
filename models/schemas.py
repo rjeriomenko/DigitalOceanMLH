@@ -67,11 +67,21 @@ class ChatSession(BaseModel):
     messages: List[ChatMessage] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
     last_updated: datetime = Field(default_factory=datetime.now)
+    clothing_descriptions: List[dict] = Field(default_factory=list)  # Store clothing item descriptions
 
     def add_message(self, role: str, content: str) -> None:
         """Add a message to the session"""
         self.messages.append(ChatMessage(role=role, content=content))
         self.last_updated = datetime.now()
+
+    def set_clothing_descriptions(self, descriptions: List[dict]) -> None:
+        """Store clothing descriptions for this session"""
+        self.clothing_descriptions = descriptions
+        self.last_updated = datetime.now()
+
+    def get_clothing_descriptions(self) -> List[dict]:
+        """Get stored clothing descriptions"""
+        return self.clothing_descriptions
 
     def get_gradient_messages(self) -> List[dict]:
         """Get all messages in Gradient API format"""

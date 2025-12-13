@@ -136,6 +136,108 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/api/default-wardrobe', methods=['GET'])
+def get_default_wardrobe():
+    """
+    Get 30 random clothing items from the default wardrobe
+
+    Returns:
+        JSON with list of filenames
+    """
+    try:
+        import random
+        clothing_folder = os.path.join(os.path.dirname(__file__), 'clothing')
+        all_clothing = [f for f in os.listdir(clothing_folder) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
+
+        selected_clothing = random.sample(all_clothing, min(30, len(all_clothing)))
+
+        return jsonify({
+            'files': selected_clothing
+        })
+    except Exception as e:
+        print(f"Error getting default wardrobe: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/weather', methods=['GET'])
+def get_weather():
+    """
+    Get current weather data for display
+
+    Returns:
+        JSON with temperature, location, and weather description
+    """
+    try:
+        import requests
+
+        # Get client IP from Flask request context
+        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if ',' in client_ip:
+            client_ip = client_ip.split(',')[0].strip()
+
+        # Default weather for localhost/private IPs
+        if client_ip in ['127.0.0.1', 'localhost'] or client_ip.startswith('192.168.') or client_ip.startswith('10.'):
+            return jsonify({
+                'temperature': 72,
+                'location': 'New York',
+                'description': 'clear/sunny',
+                'unit': 'F'
+            })
+
+        # Try to get real location and weather
+        try:
+            geo_response = requests.get(f'https://ipapi.co/{client_ip}/json/', timeout=2)
+            if geo_response.ok:
+                geo_data = geo_response.json()
+                city = geo_data.get('city', 'Unknown')
+                latitude = geo_data.get('latitude')
+                longitude = geo_data.get('longitude')
+
+                if latitude and longitude:
+                    # Get weather from open-meteo
+                    weather_response = requests.get(
+                        f'https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m,weather_code&temperature_unit=fahrenheit',
+                        timeout=2
+                    )
+
+                    if weather_response.ok:
+                        weather_data = weather_response.json()
+                        current = weather_data.get('current', {})
+                        temp = current.get('temperature_2m', 72)
+                        weather_code = current.get('weather_code', 0)
+
+                        # Map weather codes to descriptions
+                        weather_map = {
+                            0: 'clear/sunny', 1: 'mainly clear', 2: 'partly cloudy', 3: 'overcast',
+                            45: 'foggy', 48: 'foggy', 51: 'light drizzle', 53: 'moderate drizzle',
+                            55: 'dense drizzle', 61: 'slight rain', 63: 'moderate rain', 65: 'heavy rain',
+                            71: 'slight snow', 73: 'moderate snow', 75: 'heavy snow', 80: 'rain showers',
+                            81: 'rain showers', 82: 'heavy rain showers', 95: 'thunderstorm'
+                        }
+                        weather_desc = weather_map.get(weather_code, 'clear')
+
+                        return jsonify({
+                            'temperature': temp,
+                            'location': city,
+                            'description': weather_desc,
+                            'unit': 'F'
+                        })
+        except:
+            pass
+
+        # Fallback
+        return jsonify({
+            'temperature': 72,
+            'location': 'Unknown',
+            'description': 'clear',
+            'unit': 'F'
+        })
+
+    except Exception as e:
+        print(f"Error getting weather: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/generate', methods=['POST'])
 def generate_outfits():
     """
@@ -175,6 +277,15 @@ def generate_outfits():
             emit_progress(socket_sid, "error", "Please provide clothing images or a question", 0)
             return jsonify({'error': 'Please provide clothing images or a question'}), 400
 
+        # If no clothing files but user submitted again, check if they already submitted
+        if not clothing_files and query:
+            # Check if this is a follow-up question
+            session_check = session_manager.get_session(session_id) if session_id else None
+            if session_check and len(session_check.messages) == 0:
+                # New session with no images
+                emit_progress(socket_sid, "error", "Please upload clothing images first, or ask a question about previously generated outfits", 0)
+                return jsonify({'error': 'Please upload clothing images first'}), 400
+
         # Get optional selfies (up to 3)
         selfie_files = request.files.getlist('selfies')
 
@@ -201,9 +312,12 @@ def generate_outfits():
                 # Add query to session history
                 session.add_message("user", query)
 
+                # Get stored clothing descriptions from session if available
+                stored_clothing = session.get_clothing_descriptions() if session else []
+
                 # Get text-only response from query handler with conversation history
                 conversation_history = session.get_gradient_messages() if session else []
-                query_result = handle_query(query, [], None, conversation_history=conversation_history)
+                query_result = handle_query(query, stored_clothing, None, conversation_history=conversation_history)
 
                 query_response = None
                 if query_result['type'] == 'question':
@@ -386,6 +500,9 @@ def generate_outfits():
                     {"items_count": len(clothing_descriptions)}
                 )
 
+            # Store clothing descriptions in session for future queries
+            session.set_clothing_descriptions(clothing_descriptions)
+
             # Get weather context for outfit recommendations
             weather_context = get_weather_context()
 
@@ -555,6 +672,13 @@ def generate_outfits():
 def serve_output(filename):
     """Serve generated outfit images"""
     return send_from_directory(app.config['OUTPUT_FOLDER'], filename)
+
+
+@app.route('/clothing/<filename>')
+def serve_clothing(filename):
+    """Serve default clothing images"""
+    clothing_dir = os.path.join(os.path.dirname(__file__), 'clothing')
+    return send_from_directory(clothing_dir, filename)
 
 
 @app.route('/unsplash/<filename>')
