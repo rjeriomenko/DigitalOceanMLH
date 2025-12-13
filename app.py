@@ -67,6 +67,69 @@ def emit_progress(sid: str, step: str, message: str, percent: int, details: dict
     socketio.emit('progress', progress.to_dict(), room=sid)
 
 
+def get_weather_context():
+    """
+    Get current weather context for outfit recommendations.
+
+    Returns:
+        str: Weather context string to add to outfit selection instructions
+    """
+    try:
+        import requests
+
+        # Get client IP from Flask request context
+        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if ',' in client_ip:
+            client_ip = client_ip.split(',')[0].strip()
+
+        # Default weather context for localhost/private IPs
+        if client_ip in ['127.0.0.1', 'localhost'] or client_ip.startswith('192.168.') or client_ip.startswith('10.'):
+            return "WEATHER CONTEXT: Current conditions in New York - 72°F and clear/sunny. Consider weather-appropriate outfit choices."
+
+        # Try to get real location and weather
+        try:
+            geo_response = requests.get(f'https://ipapi.co/{client_ip}/json/', timeout=2)
+            if geo_response.ok:
+                geo_data = geo_response.json()
+                city = geo_data.get('city', 'your location')
+                latitude = geo_data.get('latitude')
+                longitude = geo_data.get('longitude')
+
+                if latitude and longitude:
+                    # Get weather from open-meteo
+                    weather_response = requests.get(
+                        f'https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m,weather_code&temperature_unit=fahrenheit',
+                        timeout=2
+                    )
+
+                    if weather_response.ok:
+                        weather_data = weather_response.json()
+                        current = weather_data.get('current', {})
+                        temp = current.get('temperature_2m', 72)
+                        weather_code = current.get('weather_code', 0)
+
+                        # Map weather codes to descriptions
+                        weather_map = {
+                            0: 'clear/sunny', 1: 'mainly clear', 2: 'partly cloudy', 3: 'overcast',
+                            45: 'foggy', 48: 'foggy', 51: 'light drizzle', 53: 'moderate drizzle',
+                            55: 'dense drizzle', 61: 'slight rain', 63: 'moderate rain', 65: 'heavy rain',
+                            71: 'slight snow', 73: 'moderate snow', 75: 'heavy snow', 80: 'rain showers',
+                            81: 'rain showers', 82: 'heavy rain showers', 95: 'thunderstorm'
+                        }
+                        weather_desc = weather_map.get(weather_code, 'clear')
+
+                        return f"WEATHER CONTEXT: Current conditions in {city} - {temp}°F and {weather_desc}. Consider weather-appropriate outfit choices."
+        except:
+            pass
+
+        # Fallback
+        return "WEATHER CONTEXT: Consider weather-appropriate outfit choices for current conditions."
+
+    except Exception as e:
+        print(f"Error getting weather context: {e}")
+        return None
+
+
 @app.route('/')
 def index():
     """Serve the main page"""
@@ -304,6 +367,9 @@ def generate_outfits():
                     {"items_count": len(clothing_descriptions)}
                 )
 
+            # Get weather context for outfit recommendations
+            weather_context = get_weather_context()
+
             # Handle query if provided
             query_response = None
             additional_instructions = None
@@ -325,6 +391,13 @@ def generate_outfits():
                     session.add_message("assistant", query_response)
                 elif query_result['type'] == 'instruction':
                     additional_instructions = query_result['instructions']
+
+            # Add weather context to additional instructions
+            if weather_context:
+                if additional_instructions:
+                    additional_instructions = f"{additional_instructions}\n\n{weather_context}"
+                else:
+                    additional_instructions = weather_context
 
             # Generate outfits with agent
             emit_progress(

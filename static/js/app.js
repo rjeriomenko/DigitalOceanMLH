@@ -993,6 +993,8 @@ function magnifyCard(card) {
         magnifiedCard.remove();
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('keydown', handleEscape);
+        // Restore scroll
+        document.body.style.overflow = 'auto';
     }
 
     function handleEscape(e) {
@@ -1008,11 +1010,6 @@ function magnifyCard(card) {
 
     // Prevent body scroll
     document.body.style.overflow = 'hidden';
-
-    // Restore scroll when closed
-    overlay.addEventListener('click', () => {
-        document.body.style.overflow = 'auto';
-    });
 }
 
 // ===== Outfit Placeholder Creation =====
