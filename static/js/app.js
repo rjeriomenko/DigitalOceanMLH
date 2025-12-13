@@ -1344,6 +1344,11 @@ async function insertDefaultClothes() {
             clothingFiles = [...clothingFiles, ...files];
             displayClothingPreviews(clothingFiles);
 
+            // Show clear button and update labels
+            document.getElementById('clear-clothing-btn').style.display = 'inline-block';
+            updateFileLabel(clothingInput, `${clothingFiles.length} file(s) selected`);
+            updateGenerateButtonText();
+
             insertBtn.textContent = `Inserted ${files.length} items`;
             setTimeout(() => {
                 insertBtn.textContent = originalText;
@@ -1372,6 +1377,13 @@ function setupDragAndDrop() {
         const filesToAdd = Array.from(files).slice(0, remaining);
         selfieFiles = [...selfieFiles, ...filesToAdd];
         displaySelfiePreview(selfieFiles);
+
+        // Show clear button and update labels
+        if (selfieFiles.length > 0) {
+            document.getElementById('clear-selfie-btn').style.display = 'inline-block';
+            updateFileLabel(selfieInput, `${selfieFiles.length} file(s) selected`);
+            updateGenerateButtonText();
+        }
     });
 
     // Clothing drop zone
@@ -1381,6 +1393,13 @@ function setupDragAndDrop() {
         const filesToAdd = Array.from(files).slice(0, remaining);
         clothingFiles = [...clothingFiles, ...filesToAdd];
         displayClothingPreviews(clothingFiles);
+
+        // Show clear button and update labels
+        if (clothingFiles.length > 0) {
+            document.getElementById('clear-clothing-btn').style.display = 'inline-block';
+            updateFileLabel(clothingInput, `${clothingFiles.length} file(s) selected`);
+            updateGenerateButtonText();
+        }
     });
 }
 
