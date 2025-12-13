@@ -1,8 +1,11 @@
-// State management
+// ===== State Management =====
 let selfieFile = null;
 let clothingFiles = [];
+let socket = null;
+let socketId = null;
+let sessionId = null;
 
-// DOM elements
+// ===== DOM Elements =====
 const selfieInput = document.getElementById('selfie');
 const clothingInput = document.getElementById('clothing');
 const selfiePreview = document.getElementById('selfie-preview');
@@ -15,14 +18,108 @@ const queryAnswer = document.getElementById('query-answer');
 const outfitsContainer = document.getElementById('outfits-container');
 const errorSection = document.getElementById('error-section');
 const errorMessage = document.getElementById('error-message');
+const progressSection = document.getElementById('progress-section');
+const progressBar = document.getElementById('progress-bar');
+const progressFill = document.getElementById('progress-fill');
+const progressText = document.getElementById('progress-text');
+const sessionInfo = document.getElementById('session-info');
 
-// File input handlers
+// ===== WebSocket Setup =====
+function initWebSocket() {
+    socket = io();
+
+    socket.on('connect', () => {
+        console.log('WebSocket connected');
+        socketId = socket.id;
+        console.log('Socket ID:', socketId);
+    });
+
+    socket.on('connected', (data) => {
+        socketId = data.sid;
+        console.log('Server confirmed connection:', socketId);
+    });
+
+    socket.on('progress', (data) => {
+        console.log('Progress update:', data);
+        updateProgress(data);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('WebSocket disconnected');
+    });
+
+    socket.on('error', (error) => {
+        console.error('WebSocket error:', error);
+    });
+}
+
+// Initialize WebSocket on load
+document.addEventListener('DOMContentLoaded', () => {
+    initWebSocket();
+});
+
+// ===== Progress Updates =====
+function updateProgress(data) {
+    const { step, message, progress_percent, details } = data;
+
+    // Show progress section
+    if (progressSection) {
+        progressSection.style.display = 'block';
+    }
+
+    // Update progress bar
+    if (progressFill) {
+        progressFill.style.width = `${progress_percent}%`;
+    }
+
+    // Update progress text
+    if (progressText) {
+        progressText.textContent = message;
+    }
+
+    // Store session ID if provided
+    if (details && details.session_id) {
+        sessionId = details.session_id;
+        updateSessionInfo(details.session_id, details.is_new_session);
+    }
+
+    // Handle completion
+    if (step === 'complete') {
+        setTimeout(() => {
+            if (progressSection) {
+                progressSection.style.display = 'none';
+            }
+        }, 2000);
+    }
+
+    // Handle errors
+    if (step === 'error') {
+        if (progressSection) {
+            progressSection.style.display = 'none';
+        }
+    }
+}
+
+function updateSessionInfo(sid, isNew) {
+    if (sessionInfo) {
+        if (isNew) {
+            sessionInfo.textContent = `🆕 New conversation started`;
+        } else {
+            sessionInfo.textContent = `💬 Continuing conversation`;
+        }
+        sessionInfo.style.display = 'block';
+    }
+}
+
+// ===== File Input Handlers =====
 selfieInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) {
         selfieFile = file;
         displaySelfiePreview(file);
         updateFileLabel(selfieInput, file.name);
+        // Show clear button
+        document.getElementById('clear-selfie-btn').style.display = 'inline-block';
     }
 });
 
@@ -30,16 +127,17 @@ clothingInput.addEventListener('change', (e) => {
     clothingFiles = Array.from(e.target.files);
     displayClothingPreviews(clothingFiles);
     updateFileLabel(clothingInput, `${clothingFiles.length} file(s) selected`);
+    // Show clear button
+    document.getElementById('clear-clothing-btn').style.display = 'inline-block';
 });
 
-// Update file label text
 function updateFileLabel(input, text) {
     const label = input.nextElementSibling;
     const labelText = label.querySelector('.file-label-text');
     labelText.textContent = text;
 }
 
-// Display selfie preview
+// ===== Display Previews =====
 function displaySelfiePreview(file) {
     selfiePreview.innerHTML = '';
     const reader = new FileReader();
@@ -55,7 +153,6 @@ function displaySelfiePreview(file) {
     reader.readAsDataURL(file);
 }
 
-// Display clothing previews
 function displayClothingPreviews(files) {
     clothingPreview.innerHTML = '';
     files.forEach((file, index) => {
@@ -73,32 +170,44 @@ function displayClothingPreviews(files) {
     });
 }
 
-// Remove selfie
+// ===== Remove Functions =====
 function removeSelfie() {
     selfieFile = null;
     selfieInput.value = '';
     selfiePreview.innerHTML = '';
     updateFileLabel(selfieInput, 'Choose selfie...');
+    document.getElementById('clear-selfie-btn').style.display = 'none';
 }
 
-// Remove clothing item
+function clearSelfie() {
+    removeSelfie();
+}
+
 function removeClothing(index) {
     clothingFiles.splice(index, 1);
     displayClothingPreviews(clothingFiles);
 
-    // Update file input
     const dt = new DataTransfer();
     clothingFiles.forEach(file => dt.items.add(file));
     clothingInput.files = dt.files;
 
     if (clothingFiles.length === 0) {
         updateFileLabel(clothingInput, 'Choose clothing images...');
+        document.getElementById('clear-clothing-btn').style.display = 'none';
     } else {
         updateFileLabel(clothingInput, `${clothingFiles.length} file(s) selected`);
     }
 }
 
-// Generate outfits
+function clearClothing() {
+    clothingFiles = [];
+    clothingInput.value = '';
+    clothingPreview.innerHTML = '';
+    updateFileLabel(clothingInput, 'Choose clothing images...');
+    document.getElementById('clear-clothing-btn').style.display = 'none';
+}
+
+// ===== Generate Outfits =====
 generateBtn.addEventListener('click', async () => {
     // Validation
     if (clothingFiles.length === 0) {
@@ -116,6 +225,13 @@ generateBtn.addEventListener('click', async () => {
     resultsSection.style.display = 'none';
     queryResponseDiv.style.display = 'none';
     outfitsContainer.innerHTML = '';
+
+    // Show progress
+    if (progressSection) {
+        progressSection.style.display = 'block';
+        progressFill.style.width = '0%';
+        progressText.textContent = 'Starting...';
+    }
 
     // Show loading state
     const btnText = generateBtn.querySelector('.btn-text');
@@ -144,10 +260,21 @@ generateBtn.addEventListener('click', async () => {
             formData.append('query', query);
         }
 
-        // Make API request
+        // Add session ID if exists (for continued conversation)
+        if (sessionId) {
+            formData.append('session_id', sessionId);
+        }
+
+        // Make API request with socket ID in header
+        const headers = {};
+        if (socketId) {
+            headers['X-Socket-ID'] = socketId;
+        }
+
         const response = await fetch('/api/generate', {
             method: 'POST',
-            body: formData
+            body: formData,
+            headers: headers
         });
 
         const data = await response.json();
@@ -156,11 +283,22 @@ generateBtn.addEventListener('click', async () => {
             throw new Error(data.error || 'Failed to generate outfits');
         }
 
+        // Update session ID
+        if (data.session_id) {
+            sessionId = data.session_id;
+        }
+
         // Display results
         displayResults(data);
 
+        // Don't clear query input - allow continued conversation
+        // queryInput.value = '';  // REMOVED
+
     } catch (error) {
         showError(error.message);
+        if (progressSection) {
+            progressSection.style.display = 'none';
+        }
     } finally {
         // Reset button state
         btnText.style.display = 'inline-block';
@@ -169,9 +307,15 @@ generateBtn.addEventListener('click', async () => {
     }
 });
 
-// Display results
+// ===== Display Results =====
 function displayResults(data) {
     resultsSection.style.display = 'block';
+
+    // Show session context
+    if (data.conversation_context && sessionInfo) {
+        sessionInfo.textContent = `💬 ${data.conversation_context}`;
+        sessionInfo.style.display = 'block';
+    }
 
     // Show query response if exists
     if (data.query_response) {
@@ -191,7 +335,7 @@ function displayResults(data) {
     }
 }
 
-// Create outfit card
+// ===== Create Outfit Card =====
 function createOutfitCard(outfit) {
     const card = document.createElement('div');
     card.className = 'outfit-card';
@@ -229,19 +373,20 @@ function createOutfitCard(outfit) {
     return card;
 }
 
-// Show error
+// ===== Error Handling =====
 function showError(message) {
     errorSection.style.display = 'block';
     errorMessage.textContent = `❌ ${message}`;
     errorSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-// Hide error
 function hideError() {
     errorSection.style.display = 'none';
     errorMessage.textContent = '';
 }
 
-// Make remove functions global
+// ===== Make Functions Global =====
 window.removeSelfie = removeSelfie;
+window.clearSelfie = clearSelfie;
 window.removeClothing = removeClothing;
+window.clearClothing = clearClothing;

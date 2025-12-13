@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fashion AI - Outfit Generator</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -43,6 +44,7 @@
                         <label for="selfie" class="file-label">
                             <span class="file-label-text">Choose selfie...</span>
                         </label>
+                        <button type="button" id="clear-selfie-btn" class="btn-clear" style="display: none;" onclick="clearSelfie()">Clear Selfie</button>
                         <div id="selfie-preview" class="preview-container"></div>
                     </div>
                 </div>
@@ -56,6 +58,7 @@
                         <label for="clothing" class="file-label">
                             <span class="file-label-text">Choose clothing images...</span>
                         </label>
+                        <button type="button" id="clear-clothing-btn" class="btn-clear" style="display: none;" onclick="clearClothing()">Clear All Clothing</button>
                         <div id="clothing-preview" class="preview-container"></div>
                     </div>
                 </div>
@@ -65,6 +68,17 @@
                     <span class="spinner" style="display: none;">⏳</span>
                 </button>
             </section>
+
+            <!-- Progress Section -->
+            <section id="progress-section" class="progress-section" style="display: none;">
+                <div class="progress-bar-container" id="progress-bar">
+                    <div class="progress-bar-fill" id="progress-fill"></div>
+                </div>
+                <p class="progress-text" id="progress-text">Starting...</p>
+            </section>
+
+            <!-- Session Info -->
+            <div id="session-info" class="session-info" style="display: none;"></div>
 
             <!-- Results Section -->
             <section id="results-section" class="results-section" style="display: none;">
