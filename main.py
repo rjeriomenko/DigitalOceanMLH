@@ -25,7 +25,7 @@ load_dotenv()
 from services.utils import validate_image_paths
 from services.image_processor import describe_clothing_items
 from services.gradient_agent import select_outfit
-from services.gemini_generator import generate_outfit_image
+from services.gemini_generator import generate_multiple_outfits
 
 
 def print_banner():
@@ -125,30 +125,34 @@ def main():
         clothing_descriptions = describe_clothing_items(image_paths)
         print(f"   ✓ Generated descriptions for {len(clothing_descriptions)} items")
 
-        # Step 3: Agent selects outfit
-        print("\n👔 Step 3: Consulting DigitalOcean fashion agent...")
-        selection_result = select_outfit(clothing_descriptions)
-        selected_indices = selection_result["selected_indices"]
-        selected_paths = selection_result["selected_paths"]
-        reasoning = selection_result["reasoning"]
+        # Step 3: Agent selects outfits (1-3 combinations)
+        print("\n👔 Step 3: Consulting DigitalOcean fashion agent for outfit combinations...")
+        outfits = select_outfit(clothing_descriptions)
 
-        print(f"   ✓ Agent selected {len(selected_paths)} items")
-        print(f"\n   Selected items: {', '.join(map(str, selected_indices))}")
-        print(f"   Reasoning: {reasoning.split(chr(10))[0][:80]}...")
+        print(f"   ✓ Agent created {len(outfits)} outfit(s)")
+        for outfit in outfits:
+            print(f"\n   Outfit {outfit['outfit_number']}:")
+            print(f"      Items: {', '.join(map(str, outfit['selected_indices']))}")
+            print(f"      Style: {outfit['reasoning'][:80]}...")
 
-        # Step 4: Generate outfit image
-        print("\n🎨 Step 4: Generating outfit image with Gemini NanoBanana...")
-        output_image_path = generate_outfit_image(
-            selected_image_paths=selected_paths,
-            output_dir="output"
-        )
+        # Step 4: Generate outfit images in parallel
+        print(f"\n🎨 Step 4: Generating {len(outfits)} outfit image(s) with Gemini NanoBanana...")
+        results = generate_multiple_outfits(outfits, output_dir="output")
 
         # Success!
         print("\n" + "=" * 55)
-        print("✅ SUCCESS! Your outfit image has been generated!")
+        print(f"✅ SUCCESS! {len(results)} outfit image(s) generated!")
         print("=" * 55)
-        print(f"\n📁 Output: {output_image_path}")
-        print(f"\n💡 Tip: Open the image to see your AI-generated outfit!")
+
+        # Display results
+        for result in results:
+            if result.get("generated_image_path"):
+                print(f"\n📁 Outfit {result['outfit_number']}: {result['generated_image_path']}")
+                print(f"   {result['reasoning'][:60]}...")
+            elif result.get("error"):
+                print(f"\n❌ Outfit {result['outfit_number']}: Generation failed - {result['error']}")
+
+        print(f"\n💡 Tip: Check the output/ folder to see all {len(results)} AI-generated outfit(s)!")
         print()
 
         return 0

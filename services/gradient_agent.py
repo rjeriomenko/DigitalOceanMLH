@@ -12,7 +12,7 @@ from gradient import Gradient
 
 def select_outfit(clothing_descriptions, agent_access_key=None, agent_endpoint=None, model="llama3.3-70b-instruct"):
     """
-    Use DigitalOcean agent to select the best outfit combination from clothing items.
+    Use DigitalOcean agent to select multiple outfit combinations from clothing items.
 
     Args:
         clothing_descriptions: List of dicts with 'index', 'path', 'description'
@@ -21,11 +21,13 @@ def select_outfit(clothing_descriptions, agent_access_key=None, agent_endpoint=N
         model: Model to use (default: llama3.3-70b-instruct)
 
     Returns:
-        dict: {
-            "selected_indices": [1, 3, 5],  # Item numbers selected
-            "selected_paths": ["path1.jpg", "path3.jpg", "path5.jpg"],
-            "reasoning": "Explanation from agent"
-        }
+        list[dict]: List of outfit dictionaries, each containing:
+            {
+                "outfit_number": 1,
+                "selected_indices": [1, 3, 5],
+                "selected_paths": ["path1.jpg", "path3.jpg", "path5.jpg"],
+                "reasoning": "Explanation from agent"
+            }
 
     Raises:
         ValueError: If required credentials are missing
@@ -53,24 +55,45 @@ def select_outfit(clothing_descriptions, agent_access_key=None, agent_endpoint=N
 
 {items_text}
 
-Based on your expertise as a fashion stylist, please select 3-5 items that create a cohesive, stylish outfit.
+Based on your expertise as a fashion stylist, please create 1-3 DIFFERENT outfit combinations from these items.
+
+REQUIREMENTS:
+- Create AT LEAST 1 outfit (always required)
+- Create UP TO 3 outfits total if there are enough suitable items
+- Each outfit should have 3-5 items
+- Outfits should be distinct from each other (different styles, occasions, or color schemes)
+- Only create multiple outfits if the wardrobe has enough variety
 
 CRITICAL INSTRUCTION - Response Format:
 Your response must have EXACTLY this format:
 
-First line: ONLY the item numbers separated by commas. Nothing else on this line.
-Second line: Your brief explanation (1-2 sentences).
+OUTFIT 1:
+[item numbers separated by commas]
+[brief 1-2 sentence explanation]
+
+OUTFIT 2:
+[item numbers separated by commas]
+[brief 1-2 sentence explanation]
+
+OUTFIT 3:
+[item numbers separated by commas]
+[brief 1-2 sentence explanation]
 
 CORRECT Example:
+OUTFIT 1:
 2,4,5
-These items create a classic casual look with complementary earth tones and balanced proportions.
+A classic casual look with complementary earth tones and balanced proportions.
+
+OUTFIT 2:
+1,3,7
+A bold streetwear ensemble featuring coordinating colors and modern silhouettes.
 
 INCORRECT Examples:
-- DO NOT write: "I think items 2, 4, and 5 would work well..." (too many words on first line)
-- DO NOT write: "Based on the colors, I select: 2,4,5" (explanation before numbers)
-- DO NOT include thinking process in your response
+- DO NOT include <think> tags or reasoning before the outfits
+- DO NOT write explanations on the same line as item numbers
+- DO NOT repeat the same items in every outfit unless necessary
 
-Remember: First line = numbers and commas ONLY. Second line = explanation."""
+Remember: Create 1-3 distinct outfits. Always label them as OUTFIT 1:, OUTFIT 2:, etc."""
 
     print("\nConsulting fashion agent for outfit selection...")
 
@@ -93,35 +116,102 @@ Remember: First line = numbers and commas ONLY. Second line = explanation."""
         response_text = response.choices[0].message.content.strip()
         print(f"\nAgent response:\n{response_text}\n")
 
-        # Parse the response to extract item numbers
-        selected_indices = parse_agent_response(response_text)
+        # Parse the response to extract multiple outfits
+        outfits = parse_multiple_outfits(response_text, clothing_descriptions)
 
-        if not selected_indices:
-            # Fallback: if parsing fails, use all items
-            print("Warning: Could not parse agent response. Using all items.")
-            selected_indices = [item['index'] for item in clothing_descriptions]
+        if not outfits:
+            # Fallback: if parsing fails, create one outfit with all items
+            print("Warning: Could not parse agent response. Creating single outfit with all items.")
+            outfits = [{
+                "outfit_number": 1,
+                "selected_indices": [item['index'] for item in clothing_descriptions],
+                "selected_paths": [item['path'] for item in clothing_descriptions],
+                "reasoning": "Using all available items (parsing failed)"
+            }]
 
-        # Get the paths for selected items
+        return outfits
+
+    except Exception as e:
+        print(f"Error calling agent: {e}")
+        # Fallback: use all items if agent fails
+        print("Falling back to using all clothing items in single outfit...")
+        return [{
+            "outfit_number": 1,
+            "selected_indices": [item['index'] for item in clothing_descriptions],
+            "selected_paths": [item['path'] for item in clothing_descriptions],
+            "reasoning": f"Agent error: {str(e)}. Using all items."
+        }]
+
+
+def parse_multiple_outfits(response_text, clothing_descriptions):
+    """
+    Parse agent response containing multiple outfits.
+
+    Expected format:
+    OUTFIT 1:
+    1,2,3
+    Description here
+
+    OUTFIT 2:
+    4,5,6
+    Description here
+
+    Args:
+        response_text: Raw response from agent
+        clothing_descriptions: List of clothing item dicts for path lookup
+
+    Returns:
+        list[dict]: List of outfit dictionaries
+    """
+    # Remove <think> blocks
+    response_text = re.sub(r'<think>.*?</think>', '', response_text, flags=re.DOTALL)
+
+    # Split by "OUTFIT" markers
+    outfit_sections = re.split(r'OUTFIT\s+(\d+):', response_text, flags=re.IGNORECASE)
+
+    outfits = []
+
+    # Process sections (skip first element if empty)
+    for i in range(1, len(outfit_sections), 2):
+        if i + 1 >= len(outfit_sections):
+            break
+
+        outfit_number = int(outfit_sections[i])
+        outfit_content = outfit_sections[i + 1].strip()
+
+        # Split into lines
+        lines = [line.strip() for line in outfit_content.split('\n') if line.strip()]
+
+        if not lines:
+            continue
+
+        # First line should be item numbers
+        item_line = lines[0]
+        numbers = re.findall(r'\d+', item_line)
+
+        if not numbers:
+            continue
+
+        # Convert to unique integers
+        selected_indices = list(dict.fromkeys([int(n) for n in numbers]))
+
+        # Get paths for selected items
         selected_paths = [
             item['path'] for item in clothing_descriptions
             if item['index'] in selected_indices
         ]
 
-        return {
+        # Remaining lines are the reasoning
+        reasoning = ' '.join(lines[1:]) if len(lines) > 1 else "No explanation provided"
+
+        outfits.append({
+            "outfit_number": outfit_number,
             "selected_indices": selected_indices,
             "selected_paths": selected_paths,
-            "reasoning": response_text
-        }
+            "reasoning": reasoning
+        })
 
-    except Exception as e:
-        print(f"Error calling agent: {e}")
-        # Fallback: use all items if agent fails
-        print("Falling back to using all clothing items...")
-        return {
-            "selected_indices": [item['index'] for item in clothing_descriptions],
-            "selected_paths": [item['path'] for item in clothing_descriptions],
-            "reasoning": f"Agent error: {str(e)}. Using all items."
-        }
+    return outfits
 
 
 def parse_agent_response(response_text):
