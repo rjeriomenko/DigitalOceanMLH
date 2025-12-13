@@ -284,7 +284,7 @@ def generate_outfit_image_simple(image_paths, prompt, output_dir="output", api_k
     return generated_path
 
 
-def generate_multiple_outfits(outfits, output_dir="output", selfie_path=None, api_key=None):
+def generate_multiple_outfits(outfits, output_dir="output", selfie_path=None, api_key=None, progress_callback=None):
     """
     Generate multiple outfit images in parallel using async processing.
 
@@ -293,6 +293,7 @@ def generate_multiple_outfits(outfits, output_dir="output", selfie_path=None, ap
         output_dir: Directory to save generated images
         selfie_path: Optional path to user's selfie for personalized generation
         api_key: Google API key (optional)
+        progress_callback: Optional callback function(outfit_num, total, image_path)
 
     Returns:
         list[dict]: Updated outfit dicts with "generated_image_path" added to each
@@ -332,6 +333,11 @@ def generate_multiple_outfits(outfits, output_dir="output", selfie_path=None, ap
 
                 outfit["generated_image_path"] = image_path
                 print(f"   ✓ Outfit {outfit_num} complete: {image_path}")
+
+                # Call progress callback if provided
+                if progress_callback:
+                    progress_callback(outfit_num, len(outfits), image_path)
+
                 return outfit
 
             except Exception as e:

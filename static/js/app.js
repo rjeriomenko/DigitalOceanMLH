@@ -12,17 +12,14 @@ const selfiePreview = document.getElementById('selfie-preview');
 const clothingPreview = document.getElementById('clothing-preview');
 const generateBtn = document.getElementById('generate-btn');
 const queryInput = document.getElementById('query');
-const resultsSection = document.getElementById('results-section');
-const queryResponseDiv = document.getElementById('query-response');
-const queryAnswer = document.getElementById('query-answer');
-const outfitsContainer = document.getElementById('outfits-container');
+const chatHistory = document.getElementById('chat-history');
+const chatMessages = document.getElementById('chat-messages');
 const errorSection = document.getElementById('error-section');
 const errorMessage = document.getElementById('error-message');
 const progressSection = document.getElementById('progress-section');
 const progressBar = document.getElementById('progress-bar');
 const progressFill = document.getElementById('progress-fill');
 const progressText = document.getElementById('progress-text');
-const sessionInfo = document.getElementById('session-info');
 
 // ===== WebSocket Setup =====
 function initWebSocket() {
@@ -42,6 +39,11 @@ function initWebSocket() {
     socket.on('progress', (data) => {
         console.log('Progress update:', data);
         updateProgress(data);
+    });
+
+    socket.on('outfit_ready', (data) => {
+        console.log('Outfit ready:', data);
+        displayLiveOutfit(data);
     });
 
     socket.on('disconnect', () => {
@@ -80,7 +82,6 @@ function updateProgress(data) {
     // Store session ID if provided
     if (details && details.session_id) {
         sessionId = details.session_id;
-        updateSessionInfo(details.session_id, details.is_new_session);
     }
 
     // Handle completion
@@ -100,16 +101,6 @@ function updateProgress(data) {
     }
 }
 
-function updateSessionInfo(sid, isNew) {
-    if (sessionInfo) {
-        if (isNew) {
-            sessionInfo.textContent = `🆕 New conversation started`;
-        } else {
-            sessionInfo.textContent = `💬 Continuing conversation`;
-        }
-        sessionInfo.style.display = 'block';
-    }
-}
 
 // ===== File Input Handlers =====
 selfieInput.addEventListener('change', (e) => {
@@ -138,34 +129,92 @@ function updateFileLabel(input, text) {
 }
 
 // ===== Display Previews =====
-function displaySelfiePreview(file) {
+async function displaySelfiePreview(file) {
     selfiePreview.innerHTML = '';
-    const reader = new FileReader();
-    reader.onload = (e) => {
+
+    try {
+        const imageUrl = await getImagePreviewUrl(file);
         const div = document.createElement('div');
         div.className = 'preview-item';
         div.innerHTML = `
-            <img src="${e.target.result}" alt="Selfie preview">
+            <img src="${imageUrl}" alt="Selfie preview">
             <button class="remove-btn" onclick="removeSelfie()">×</button>
         `;
         selfiePreview.appendChild(div);
-    };
-    reader.readAsDataURL(file);
+    } catch (error) {
+        console.error('Error displaying selfie preview:', error);
+        // Show a placeholder
+        const div = document.createElement('div');
+        div.className = 'preview-item';
+        div.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#f0f0f0;">
+                <span>📷</span>
+            </div>
+            <button class="remove-btn" onclick="removeSelfie()">×</button>
+        `;
+        selfiePreview.appendChild(div);
+    }
 }
 
-function displayClothingPreviews(files) {
+async function displayClothingPreviews(files) {
     clothingPreview.innerHTML = '';
-    files.forEach((file, index) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
+
+    for (let index = 0; index < files.length; index++) {
+        const file = files[index];
+
+        try {
+            const imageUrl = await getImagePreviewUrl(file);
             const div = document.createElement('div');
             div.className = 'preview-item';
             div.innerHTML = `
-                <img src="${e.target.result}" alt="Clothing ${index + 1}">
+                <img src="${imageUrl}" alt="Clothing ${index + 1}">
                 <button class="remove-btn" onclick="removeClothing(${index})">×</button>
             `;
             clothingPreview.appendChild(div);
-        };
+        } catch (error) {
+            console.error(`Error displaying preview for file ${index}:`, error);
+            // Show a placeholder
+            const div = document.createElement('div');
+            div.className = 'preview-item';
+            div.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#f0f0f0;">
+                    <span>👕</span>
+                </div>
+                <button class="remove-btn" onclick="removeClothing(${index})">×</button>
+            `;
+            clothingPreview.appendChild(div);
+        }
+    }
+}
+
+// Helper function to get preview URL (handles HEIC conversion)
+async function getImagePreviewUrl(file) {
+    // Check if it's a HEIC/HEIF file
+    const isHEIC = file.type === 'image/heic' ||
+                   file.type === 'image/heif' ||
+                   file.name.toLowerCase().endsWith('.heic') ||
+                   file.name.toLowerCase().endsWith('.heif');
+
+    if (isHEIC && typeof heic2any !== 'undefined') {
+        // Convert HEIC to JPEG using heic2any library
+        try {
+            const convertedBlob = await heic2any({
+                blob: file,
+                toType: 'image/jpeg',
+                quality: 0.8
+            });
+            return URL.createObjectURL(convertedBlob);
+        } catch (error) {
+            console.error('HEIC conversion failed:', error);
+            // Fall through to try regular FileReader
+        }
+    }
+
+    // For regular images or if HEIC conversion failed, use FileReader
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = reject;
         reader.readAsDataURL(file);
     });
 }
@@ -207,6 +256,68 @@ function clearClothing() {
     document.getElementById('clear-clothing-btn').style.display = 'none';
 }
 
+// ===== Live Outfit Preview =====
+function displayLiveOutfit(data) {
+    const { outfit_number, image_url, total_outfits } = data;
+
+    // Show chat history if not visible
+    chatHistory.style.display = 'block';
+
+    // Look for the current assistant message (last one)
+    const assistantMessages = chatMessages.querySelectorAll('.chat-message-assistant');
+    const currentMessage = assistantMessages[assistantMessages.length - 1];
+
+    if (currentMessage) {
+        const outfitsGrid = currentMessage.querySelector('.outfits-grid');
+
+        if (outfitsGrid) {
+            // Check if this outfit card already exists
+            let existingCard = outfitsGrid.querySelector(`[data-outfit-number="${outfit_number}"]`);
+
+            if (existingCard) {
+                // Update existing card with the image
+                const img = existingCard.querySelector('.outfit-image');
+                if (img) {
+                    img.src = image_url;
+                }
+            } else {
+                // Create a placeholder card immediately
+                const card = document.createElement('div');
+                card.className = 'outfit-card';
+                card.setAttribute('data-outfit-number', outfit_number);
+
+                const header = document.createElement('div');
+                header.className = 'outfit-header';
+                header.textContent = `Outfit ${outfit_number}`;
+                card.appendChild(header);
+
+                const img = document.createElement('img');
+                img.className = 'outfit-image';
+                img.src = image_url;
+                img.alt = `Outfit ${outfit_number}`;
+                img.loading = 'eager'; // Load immediately for live preview
+                card.appendChild(img);
+
+                // Add placeholder details (will be filled when full response arrives)
+                const details = document.createElement('div');
+                details.className = 'outfit-details';
+                details.innerHTML = `
+                    <h4>Style</h4>
+                    <p class="outfit-reasoning">Loading details...</p>
+                    <h4>How to Wear</h4>
+                    <p class="outfit-wearing">Loading...</p>
+                `;
+                card.appendChild(details);
+
+                outfitsGrid.appendChild(card);
+
+                // Scroll to the new card
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+    }
+}
+
 // ===== Generate Outfits =====
 generateBtn.addEventListener('click', async () => {
     // Validation
@@ -220,11 +331,8 @@ generateBtn.addEventListener('click', async () => {
         return;
     }
 
-    // Hide previous results and errors
+    // Hide previous errors
     hideError();
-    resultsSection.style.display = 'none';
-    queryResponseDiv.style.display = 'none';
-    outfitsContainer.innerHTML = '';
 
     // Show progress
     if (progressSection) {
@@ -288,11 +396,16 @@ generateBtn.addEventListener('click', async () => {
             sessionId = data.session_id;
         }
 
-        // Display results
-        displayResults(data);
+        // Add user message to chat if query exists
+        if (query) {
+            addChatMessage('user', query);
+        }
 
-        // Don't clear query input - allow continued conversation
-        // queryInput.value = '';  // REMOVED
+        // Add assistant message with outfits
+        addChatMessage('assistant', data);
+
+        // Clear query input for next message
+        queryInput.value = '';
 
     } catch (error) {
         showError(error.message);
@@ -307,32 +420,86 @@ generateBtn.addEventListener('click', async () => {
     }
 });
 
-// ===== Display Results =====
-function displayResults(data) {
-    resultsSection.style.display = 'block';
+// ===== Chat Message Display =====
+function addChatMessage(role, content) {
+    // Show chat history
+    chatHistory.style.display = 'block';
 
-    // Show session context
-    if (data.conversation_context && sessionInfo) {
-        sessionInfo.textContent = `💬 ${data.conversation_context}`;
-        sessionInfo.style.display = 'block';
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'chat-message';
+
+    if (role === 'user') {
+        // User message bubble
+        const userBubble = document.createElement('div');
+        userBubble.className = 'chat-message-user';
+        userBubble.innerHTML = `
+            <div class="message-label">You</div>
+            <div class="message-text">${escapeHtml(content)}</div>
+        `;
+        messageDiv.appendChild(userBubble);
+    } else if (role === 'assistant') {
+        // Assistant message with outfits
+        const assistantBubble = document.createElement('div');
+        assistantBubble.className = 'chat-message-assistant';
+
+        let bubbleHTML = '<div class="message-label">Fashion AI</div>';
+
+        // Add query response if exists
+        if (content.query_response) {
+            bubbleHTML += `<div class="message-text">${escapeHtml(content.query_response)}</div>`;
+        }
+
+        // Add outfits grid
+        if (content.outfits && content.outfits.length > 0) {
+            bubbleHTML += '<div class="outfits-grid"></div>';
+        }
+
+        assistantBubble.innerHTML = bubbleHTML;
+
+        // Add outfit cards
+        if (content.outfits && content.outfits.length > 0) {
+            const outfitsGrid = assistantBubble.querySelector('.outfits-grid');
+
+            content.outfits.forEach(outfit => {
+                // Check if card already exists from live preview
+                let existingCard = outfitsGrid.querySelector(`[data-outfit-number="${outfit.outfit_number}"]`);
+
+                if (existingCard) {
+                    // Update the existing card with full details
+                    const reasoningP = existingCard.querySelector('.outfit-reasoning');
+                    const wearingP = existingCard.querySelector('.outfit-wearing');
+
+                    if (reasoningP) reasoningP.textContent = outfit.reasoning;
+                    if (wearingP) wearingP.textContent = outfit.wearing_instructions;
+
+                    // Handle errors
+                    if (outfit.error && !outfit.image_url) {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'outfit-error';
+                        errorDiv.textContent = `Error: ${outfit.error}`;
+                        existingCard.appendChild(errorDiv);
+                    }
+                } else {
+                    // Create new card if it doesn't exist (shouldn't happen with live preview)
+                    const card = createOutfitCard(outfit);
+                    outfitsGrid.appendChild(card);
+                }
+            });
+        }
+
+        messageDiv.appendChild(assistantBubble);
     }
 
-    // Show query response if exists
-    if (data.query_response) {
-        queryResponseDiv.style.display = 'block';
-        queryAnswer.textContent = data.query_response;
-    }
+    chatMessages.appendChild(messageDiv);
 
-    // Display outfits
-    if (data.outfits && data.outfits.length > 0) {
-        data.outfits.forEach(outfit => {
-            const card = createOutfitCard(outfit);
-            outfitsContainer.appendChild(card);
-        });
+    // Scroll to the latest message
+    messageDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
 
-        // Scroll to results
-        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // ===== Create Outfit Card =====

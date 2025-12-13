@@ -6,6 +6,7 @@
     <title>Fashion AI - Outfit Generator</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -22,6 +23,12 @@
 
         <!-- Main Content -->
         <main class="main-content">
+            <!-- Chat History Section (scrollable) -->
+            <section id="chat-history" class="chat-history" style="display: none;">
+                <h2 class="chat-title">💬 Conversation History</h2>
+                <div id="chat-messages" class="chat-messages"></div>
+            </section>
+
             <!-- Upload Section -->
             <section class="upload-section">
                 <div class="input-group">
@@ -75,21 +82,6 @@
                     <div class="progress-bar-fill" id="progress-fill"></div>
                 </div>
                 <p class="progress-text" id="progress-text">Starting...</p>
-            </section>
-
-            <!-- Session Info -->
-            <div id="session-info" class="session-info" style="display: none;"></div>
-
-            <!-- Results Section -->
-            <section id="results-section" class="results-section" style="display: none;">
-                <!-- Query Response -->
-                <div id="query-response" class="query-response" style="display: none;">
-                    <h3>💭 Response</h3>
-                    <p id="query-answer"></p>
-                </div>
-
-                <!-- Outfits -->
-                <div id="outfits-container" class="outfits-container"></div>
             </section>
 
             <!-- Error Section -->

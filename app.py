@@ -206,7 +206,7 @@ def generate_outfits():
                     print(f"Error processing selfie: {e}")
                     # Continue without selfie
 
-            # Describe clothing items
+            # Describe clothing items with per-item progress
             emit_progress(
                 socket_sid,
                 "analyzing_clothing",
@@ -214,7 +214,22 @@ def generate_outfits():
                 25
             )
 
-            clothing_descriptions = describe_clothing_items(clothing_paths)
+            # Create progress callback for clothing analysis
+            def clothing_progress_callback(idx, total, description):
+                # Calculate incremental progress between 25% and 40%
+                progress_percent = 25 + int((idx / total) * 15)
+                emit_progress(
+                    socket_sid,
+                    "analyzing_clothing",
+                    f"Analyzed item {idx}/{total}: {description[:50]}...",
+                    progress_percent,
+                    {"current_item": idx, "total_items": total}
+                )
+
+            clothing_descriptions = describe_clothing_items(
+                clothing_paths,
+                progress_callback=clothing_progress_callback
+            )
 
             emit_progress(
                 socket_sid,
@@ -267,14 +282,38 @@ def generate_outfits():
                 60
             )
 
+            # Create progress callback for outfit generation with live preview
+            def outfit_progress_callback(outfit_num, total, image_path):
+                # Calculate incremental progress between 60% and 95%
+                progress_percent = 60 + int((outfit_num / total) * 35)
+
+                # Emit progress update
+                emit_progress(
+                    socket_sid,
+                    "generating_images",
+                    f"Generated outfit {outfit_num}/{total}",
+                    progress_percent,
+                    {"current_outfit": outfit_num, "total_outfits": total}
+                )
+
+                # Emit live preview event with the image URL
+                image_filename = os.path.basename(image_path)
+                image_url = f'/output/{image_filename}'
+                socketio.emit('outfit_ready', {
+                    'outfit_number': outfit_num,
+                    'image_url': image_url,
+                    'total_outfits': total
+                }, room=socket_sid)
+
             # Generate outfit images
             results = generate_multiple_outfits(
                 outfits,
                 output_dir=app.config['OUTPUT_FOLDER'],
-                selfie_path=selfie_path
+                selfie_path=selfie_path,
+                progress_callback=outfit_progress_callback
             )
 
-            emit_progress(socket_sid, "generating_images", "Images generated successfully", 95)
+            emit_progress(socket_sid, "generating_images", "All images generated successfully", 95)
 
             # Build response
             response_data = {

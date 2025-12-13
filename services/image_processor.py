@@ -146,7 +146,7 @@ Format as two clear sections. Be concise but complete. Under 100 words total."""
     return description
 
 
-def describe_clothing_items(image_paths, api_key=None, rate_limit_delay=0.2):
+def describe_clothing_items(image_paths, api_key=None, rate_limit_delay=0.2, progress_callback=None):
     """
     Generate descriptions for multiple clothing items.
 
@@ -154,6 +154,7 @@ def describe_clothing_items(image_paths, api_key=None, rate_limit_delay=0.2):
         image_paths: List of paths to clothing images
         api_key: Google API key (optional)
         rate_limit_delay: Seconds to wait between API calls (default: 0.2)
+        progress_callback: Optional callback function(idx, total, description)
 
     Returns:
         list[dict]: List of dicts with 'index', 'path', and 'description' for each item
@@ -177,6 +178,10 @@ def describe_clothing_items(image_paths, api_key=None, rate_limit_delay=0.2):
                 "description": description
             })
             print(f"  → {description}")
+
+            # Call progress callback if provided
+            if progress_callback:
+                progress_callback(idx, len(image_paths), description)
 
             # Rate limiting: wait between API calls to avoid hitting rate limits
             if idx < len(image_paths):  # Don't wait after the last item
