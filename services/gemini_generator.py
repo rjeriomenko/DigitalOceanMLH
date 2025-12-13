@@ -14,7 +14,7 @@ from google.genai import types
 from .utils import read_local_image, save_binary_file
 
 
-def generate_outfit_image(selected_image_paths, output_dir="output", selfie_path=None, wearing_instructions=None, api_key=None):
+def generate_outfit_image(selected_image_paths, output_dir="output", selfie_path=None, wearing_instructions=None, outfit_number=None, api_key=None):
     """
     Generate an outfit image using Gemini's image generation capabilities.
 
@@ -23,6 +23,7 @@ def generate_outfit_image(selected_image_paths, output_dir="output", selfie_path
         output_dir: Directory to save generated images (default: "output")
         selfie_path: Optional path to user's selfie image
         wearing_instructions: How clothes should be worn (optional)
+        outfit_number: Outfit number for unique filename (optional)
         api_key: Google API key (optional, reads from env)
 
     Returns:
@@ -74,7 +75,7 @@ def generate_outfit_image(selected_image_paths, output_dir="output", selfie_path
     # Build wearing instructions text
     wear_text = ""
     if wearing_instructions:
-        wear_text = f"\n\nWEARING INSTRUCTIONS:\n{wearing_instructions}\n\nFollow these instructions EXACTLY when styling the outfit."
+        wear_text = f"\n\nSTYLING PREFERENCES:\n{wearing_instructions}\n\nIMPORTANT: These are styling preferences for HOW to wear the items. You must ONLY use items shown in the clothing images above. Do not add any items mentioned in styling preferences that are not shown in the images. If a preference mentions an item not in the images, ignore that part of the preference."
 
     # Create the prompt based on whether we have a selfie
     if selfie_path:
@@ -83,31 +84,51 @@ def generate_outfit_image(selected_image_paths, output_dir="output", selfie_path
 
         prompt = f"""You are given a photo of a person followed by images of clothing items. Please generate a high-quality, realistic fashion photograph showing THIS SPECIFIC PERSON wearing the outfit as specified.
 
-CRITICAL REQUIREMENTS:
-- Generate an image of the SAME PERSON from the first photo (match their appearance, face, body type, skin tone, etc.)
-- The person may be wearing some clothes in their reference photo - you can KEEP those items OR SWAP them with provided wardrobe items
-- You have FULL PERMISSION to mix and match: keep items from their current outfit and add new wardrobe items
-- Show the clothing items styled according to the wearing instructions below
+CRITICAL REQUIREMENTS - OUTFIT ITEMS:
+- The first image is the PERSON (match their appearance, face, body type, skin tone, etc.)
+- All remaining images are CLOTHING ITEMS to include in the outfit
+- You MUST use ONLY these clothing items shown in the images - do not add any items not shown
+- Show EVERY clothing item provided in the images
+- The person may be wearing some clothes in their reference photo - you can keep OR swap them with the wardrobe items shown
+
+LAYERING AND VISIBILITY:
+- You may show underlying layers (e.g., shirt under jacket) to display all items UNLESS the styling preferences specify the outer layer should be buttoned/zipped
+- If styling says "blazer buttoned" or "jacket zipped", then button/zip it even if it hides underlying items
+- If styling says "blazer open" or "jacket unzipped", show it open to reveal underlying items
+- If no buttoning/zipping instruction is given, you may show layers open to display all clothing items
+- Never show underwear or nudity - all clothing must maintain modesty
+
+STYLING AND PHOTOGRAPHY:
 - Create a professional fashion photo style with appropriate lighting and composition
-- Use a pose that clearly shows the outfit and wearing details
+- Use a pose that shows the outfit details
+- Keep the entire body and head in frame (full-body shot)
+- Clothing items can be layered and some may be partially hidden by outer layers (this is normal for layered outfits)
 - The person's appearance must match the reference photo as closely as possible{wear_text}
 
 MIXING PERMISSION:
 - If an item type is shown in wardrobe images (e.g., new shirt), use that instead of what they're wearing
-- If an item type is NOT in wardrobe images (e.g., no new shoes), you may keep what they're wearing in the reference photo
-- The goal is to show this specific person in the best version of the styled outfit"""
+- If an item type is NOT in wardrobe images (e.g., no new shoes), you may keep what they're wearing in the reference photo"""
     else:
-        prompt = f"""You are given images of articles of clothing. Please generate a high-quality, realistic fashion photograph showing a model wearing EXACTLY these clothing items styled as specified.
+        prompt = f"""You are given images of clothing items. Please generate a high-quality, realistic fashion photograph showing a model wearing EXACTLY these clothing items.
 
-Requirements:
-- Show ONLY the clothing items provided in the images
-- Style the outfit according to the wearing instructions below
-- Create a professional fashion photo style
-- Use appropriate lighting and composition
-- The model should be a realistic person in a pose that shows the styling details
-- Ensure all clothing items are clearly visible and styled as instructed{wear_text}
+CRITICAL REQUIREMENTS - OUTFIT ITEMS:
+- All images show CLOTHING ITEMS that must be included in the outfit
+- You MUST use ONLY these clothing items shown in the images - do not add any items not shown
+- Show EVERY clothing item provided in the images
+- Do not add any accessories, hats, belts, or other items unless they are shown in the input images
 
-Do not add any additional clothing, accessories, or items not shown in the input images."""
+LAYERING AND VISIBILITY:
+- You may show underlying layers (e.g., shirt under jacket) to display all items UNLESS the styling preferences specify the outer layer should be buttoned/zipped
+- If styling says "blazer buttoned" or "jacket zipped", then button/zip it even if it hides underlying items
+- If styling says "blazer open" or "jacket unzipped", show it open to reveal underlying items
+- If no buttoning/zipping instruction is given, you may show layers open to display all clothing items
+- Never show underwear or nudity - all clothing must maintain modesty
+
+STYLING AND PHOTOGRAPHY:
+- Create a professional fashion photo style with appropriate lighting and composition
+- Use a realistic model in a pose that shows the outfit details
+- Keep the entire body and head in frame (full-body shot)
+- Clothing items can be layered and some may be partially hidden by outer layers (this is normal for layered outfits){wear_text}"""
 
     # Add text prompt to parts
     image_parts.append(types.Part.from_text(text=prompt))
@@ -154,9 +175,12 @@ Do not add any additional clothing, accessories, or items not shown in the input
 
             # Check if the response part is an image
             if part.inline_data and part.inline_data.data:
-                # Generate timestamped filename
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                file_name = f"outfit_{timestamp}_{file_index}"
+                # Generate unique filename with outfit number and timestamp
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")  # Added microseconds
+                if outfit_number is not None:
+                    file_name = f"outfit_{outfit_number}_{timestamp}_{file_index}"
+                else:
+                    file_name = f"outfit_{timestamp}_{file_index}"
                 file_index += 1
 
                 inline_data = part.inline_data
@@ -297,6 +321,7 @@ def generate_multiple_outfits(outfits, output_dir="output", selfie_path=None, ap
                         output_dir,
                         selfie_path,
                         outfit.get("wearing_instructions"),
+                        outfit_num,  # Pass outfit number for unique filename
                         api_key
                     )
                 )
