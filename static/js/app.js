@@ -1111,9 +1111,11 @@ function createOutfitCard(outfit) {
     card.className = 'outfit-card';
     card.setAttribute('data-outfit-number', outfit.outfit_number);
 
-    // Add click handler for 3D magnification
+    // Add click handler for magnification
     card.addEventListener('click', (e) => {
+        console.log('Card clicked!', e.target);
         if (!e.target.classList.contains('remove-btn')) {
+            console.log('Calling magnifyCard...');
             magnifyCard(card);
         }
     });
@@ -1183,29 +1185,39 @@ function hideError() {
 
 // ===== Simple Image Magnification =====
 function magnifyCard(card) {
+    console.log('magnifyCard called with:', card);
+
     // Create overlay background
     const overlay = document.createElement('div');
     overlay.className = 'outfit-card-overlay';
+    console.log('Created overlay:', overlay);
 
     // Get the image from the card
     const originalImg = card.querySelector('.outfit-image');
-    if (!originalImg) return; // No image to magnify
+    console.log('Found image:', originalImg);
+    if (!originalImg) {
+        console.log('NO IMAGE FOUND - EXITING');
+        return; // No image to magnify
+    }
 
     // Create large image display
     const magnifiedImg = document.createElement('img');
     magnifiedImg.src = originalImg.src;
     magnifiedImg.alt = originalImg.alt;
     magnifiedImg.className = 'outfit-image-magnified';
+    console.log('Created magnified img:', magnifiedImg);
 
     // Add to body
     document.body.appendChild(overlay);
     document.body.appendChild(magnifiedImg);
+    console.log('Added overlay and magnified img to body');
 
     // Fade in
     setTimeout(() => {
         overlay.style.opacity = '1';
         magnifiedImg.style.opacity = '1';
         magnifiedImg.style.transform = 'translate(-50%, -50%) scale(1)';
+        console.log('Applied fade-in styles');
     }, 10);
 
     // Close function
